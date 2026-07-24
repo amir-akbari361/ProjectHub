@@ -17,6 +17,7 @@
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
+          "E:\\C#\\MyProject\\NuGet.Config",
           "C:\\Users\\akbar\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
@@ -25,10 +26,7 @@
           "net9.0"
         ],
         "sources": {
-          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Users\\akbar\\Downloads\\NugetPackages": {},
-          "https://api.nuget.org/v3/index.json": {},
-          "https://package-mirror.liara.ir/repository/nuget/index.json": {}
+          "https://package-mirror.liara.ir/artifactory/api/nuget/v3/nuget/": {}
         },
         "frameworks": {
           "net9.0": {
@@ -55,6 +53,36 @@
       "frameworks": {
         "net9.0": {
           "targetAlias": "net9.0",
+          "dependencies": {
+            "FluentValidation": {
+              "target": "Package",
+              "version": "[11.11.0, )"
+            },
+            "FluentValidation.DependencyInjectionExtensions": {
+              "target": "Package",
+              "version": "[11.11.0, )"
+            },
+            "Mapster": {
+              "target": "Package",
+              "version": "[7.4.0, )"
+            },
+            "Mapster.DependencyInjection": {
+              "target": "Package",
+              "version": "[1.0.1, )"
+            },
+            "MediatR": {
+              "target": "Package",
+              "version": "[12.4.1, )"
+            },
+            "Microsoft.Extensions.DependencyInjection.Abstractions": {
+              "target": "Package",
+              "version": "[9.0.0, )"
+            },
+            "Microsoft.Extensions.Logging.Abstractions": {
+              "target": "Package",
+              "version": "[9.0.0, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -88,6 +116,7 @@
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
+          "E:\\C#\\MyProject\\NuGet.Config",
           "C:\\Users\\akbar\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
@@ -96,10 +125,7 @@
           "net9.0"
         ],
         "sources": {
-          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Users\\akbar\\Downloads\\NugetPackages": {},
-          "https://api.nuget.org/v3/index.json": {},
-          "https://package-mirror.liara.ir/repository/nuget/index.json": {}
+          "https://package-mirror.liara.ir/artifactory/api/nuget/v3/nuget/": {}
         },
         "frameworks": {
           "net9.0": {
@@ -155,6 +181,7 @@
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
+          "E:\\C#\\MyProject\\NuGet.Config",
           "C:\\Users\\akbar\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
@@ -163,10 +190,7 @@
           "net9.0"
         ],
         "sources": {
-          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Users\\akbar\\Downloads\\NugetPackages": {},
-          "https://api.nuget.org/v3/index.json": {},
-          "https://package-mirror.liara.ir/repository/nuget/index.json": {}
+          "https://package-mirror.liara.ir/artifactory/api/nuget/v3/nuget/": {}
         },
         "frameworks": {
           "net9.0": {
