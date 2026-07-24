@@ -1,0 +1,220 @@
+{
+  "format": 1,
+  "restore": {
+    "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\ProjectHub.Infrastructure.csproj": {}
+  },
+  "projects": {
+    "E:\\C#\\MyProject\\src\\ProjectHub.Application\\ProjectHub.Application.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "E:\\C#\\MyProject\\src\\ProjectHub.Application\\ProjectHub.Application.csproj",
+        "projectName": "ProjectHub.Application",
+        "projectPath": "E:\\C#\\MyProject\\src\\ProjectHub.Application\\ProjectHub.Application.csproj",
+        "packagesPath": "C:\\Users\\akbar\\.nuget\\packages\\",
+        "outputPath": "E:\\C#\\MyProject\\src\\ProjectHub.Application\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\akbar\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Users\\akbar\\Downloads\\NugetPackages": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://package-mirror.liara.ir/repository/nuget/index.json": {}
+        },
+        "frameworks": {
+          "net9.0": {
+            "targetAlias": "net9.0",
+            "projectReferences": {
+              "E:\\C#\\MyProject\\src\\ProjectHub.Domain\\ProjectHub.Domain.csproj": {
+                "projectPath": "E:\\C#\\MyProject\\src\\ProjectHub.Domain\\ProjectHub.Domain.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.300/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "E:\\C#\\MyProject\\src\\ProjectHub.Domain\\ProjectHub.Domain.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "E:\\C#\\MyProject\\src\\ProjectHub.Domain\\ProjectHub.Domain.csproj",
+        "projectName": "ProjectHub.Domain",
+        "projectPath": "E:\\C#\\MyProject\\src\\ProjectHub.Domain\\ProjectHub.Domain.csproj",
+        "packagesPath": "C:\\Users\\akbar\\.nuget\\packages\\",
+        "outputPath": "E:\\C#\\MyProject\\src\\ProjectHub.Domain\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\akbar\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Users\\akbar\\Downloads\\NugetPackages": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://package-mirror.liara.ir/repository/nuget/index.json": {}
+        },
+        "frameworks": {
+          "net9.0": {
+            "targetAlias": "net9.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.300/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\ProjectHub.Infrastructure.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\ProjectHub.Infrastructure.csproj",
+        "projectName": "ProjectHub.Infrastructure",
+        "projectPath": "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\ProjectHub.Infrastructure.csproj",
+        "packagesPath": "C:\\Users\\akbar\\.nuget\\packages\\",
+        "outputPath": "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\obj\\",
+        "projectStyle": "PackageReference",
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\akbar\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "C:\\Users\\akbar\\Downloads\\NugetPackages": {},
+          "https://api.nuget.org/v3/index.json": {},
+          "https://package-mirror.liara.ir/repository/nuget/index.json": {}
+        },
+        "frameworks": {
+          "net9.0": {
+            "targetAlias": "net9.0",
+            "projectReferences": {
+              "E:\\C#\\MyProject\\src\\ProjectHub.Application\\ProjectHub.Application.csproj": {
+                "projectPath": "E:\\C#\\MyProject\\src\\ProjectHub.Application\\ProjectHub.Application.csproj"
+              },
+              "E:\\C#\\MyProject\\src\\ProjectHub.Domain\\ProjectHub.Domain.csproj": {
+                "projectPath": "E:\\C#\\MyProject\\src\\ProjectHub.Domain\\ProjectHub.Domain.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "9.0.300"
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.300/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
