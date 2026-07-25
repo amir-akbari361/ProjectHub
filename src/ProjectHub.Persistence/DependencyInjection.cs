@@ -58,3 +58,12 @@ public static class DependencyInjection
             serviceProvider => serviceProvider.GetRequiredService<ApplicationDbContext>());
 
         // Open-generic registration: one line wires IRepository<T> for every aggregate root, so we
+        // never hand-register a repository per entity. The container closes the generic on demand.
+        services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+
+        // One commit boundary per request, sharing the same scoped DbContext as the repositories.
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        return services;
+    }
+}

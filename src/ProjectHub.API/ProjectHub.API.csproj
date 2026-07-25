@@ -6,12 +6,26 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!--
+    The API is a composition root: it is the ONE place allowed to reference every executable layer
+    at once (Application + Persistence + Infrastructure) so it can wire their AddXxx() extensions
+    together. Inner layers still never reference outward — the arrows all point in.
+  -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.5" />
+    <ProjectReference Include="..\ProjectHub.Application\ProjectHub.Application.csproj" />
+    <ProjectReference Include="..\ProjectHub.Persistence\ProjectHub.Persistence.csproj" />
+    <ProjectReference Include="..\ProjectHub.Infrastructure\ProjectHub.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ProjectHub.Application\ProjectHub.Application.csproj" />
+    <!-- Structured logging: Serilog replaces the default console logger. Sinks + config binding. -->
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+
+    <!-- Swagger UI + OpenAPI document generation (mature ecosystem, JWT "Authorize" button later). -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
   </ItemGroup>
 
 </Project>
