@@ -26,6 +26,29 @@
 
     <!-- Swagger UI + OpenAPI document generation (mature ecosystem, JWT "Authorize" button later). -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+
+    <!--
+      EF Core design-time tooling. The API is the startup project the `dotnet ef` CLI boots to
+      discover the DbContext (via AddPersistence), so it must carry the Design package. This is a
+      build/design-time-only dependency (PrivateAssets=all) and is never shipped in the runtime output.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!--
+    The dev RSA signing key lives as a git-ignored file under keys/. CopyToOutputDirectory ensures it
+    travels next to the compiled binary so AppContext.BaseDirectory + "keys/jwt-private.pem" resolves
+    identically under `dotnet run` and in a published layout. PreserveNewest avoids needless copies on
+    rebuilds. This item is dev-only convenience: in Docker/prod the key arrives via the
+    Jwt__PrivateKeyPem env var instead, so a missing file here is harmless in those environments.
+  -->
+  <ItemGroup>
+    <None Include="keys\**\*.pem" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
+
+

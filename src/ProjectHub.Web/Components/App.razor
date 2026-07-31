@@ -5,9 +5,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
-    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["ProjectHub.Web.styles.css"]" />
+
+    <!-- MudBlazor requires the Roboto font and its bundled CSS. These replace Bootstrap entirely;
+         we keep only app.css for our own overrides. Loading them here (not per-page) means the
+         theme is available before the first component renders, avoiding a flash of unstyled content. -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
     <HeadOutlet />
@@ -16,6 +22,9 @@
 <body>
     <Routes />
     <script src="_framework/blazor.web.js"></script>
+    <!-- MudBlazor's JS powers ripples, popovers, dialogs, and the snackbar. It must load after
+         blazor.web.js so its interop hooks attach to an initialized runtime. -->
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
 </body>
 
 </html>

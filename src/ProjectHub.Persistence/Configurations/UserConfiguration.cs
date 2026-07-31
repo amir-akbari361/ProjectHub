@@ -58,5 +58,12 @@ internal sealed class UserConfiguration : EntityConfiguration<User>
             .WithOne()
             .HasForeignKey(userRole => userRole.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Same read-only-collection treatment for refresh tokens: the public property is
+        // IReadOnlyCollection, so EF must materialise into the private _refreshTokens field. The
+        // FK/relationship itself is declared on the RefreshToken side (RefreshTokenConfiguration);
+        // here we only fix the access mode so EF does not try to use the (non-existent) setter.
+        var refreshTokensNavigation = builder.Metadata.FindNavigation(nameof(User.RefreshTokens))!;
+        refreshTokensNavigation.SetPropertyAccessMode(PropertyAccessMode.Field);
     }
 }

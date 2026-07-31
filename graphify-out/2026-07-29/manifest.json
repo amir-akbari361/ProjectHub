@@ -1,0 +1,752 @@
+{
+  "ProjectHub.sln": {
+    "mtime": 1784836423.9508317,
+    "ast_hash": "51822f05c240e88ed80dcae3af2ae32c",
+    "semantic_hash": "51822f05c240e88ed80dcae3af2ae32c"
+  },
+  "src/ProjectHub.API/Program.cs": {
+    "mtime": 1785018180.1548371,
+    "ast_hash": "bc59e72795ab064c61008217f6f5acd3",
+    "semantic_hash": "bc59e72795ab064c61008217f6f5acd3"
+  },
+  "src/ProjectHub.API/ProjectHub.API.csproj": {
+    "mtime": 1785017524.208216,
+    "ast_hash": "2ed2154652b5182530fe57c189d39e65",
+    "semantic_hash": "2ed2154652b5182530fe57c189d39e65"
+  },
+  "src/ProjectHub.API/Properties/launchSettings.json": {
+    "mtime": 1784836362.6290927,
+    "ast_hash": "bd1542c71bd2c964ce3925953ff704e5",
+    "semantic_hash": "bd1542c71bd2c964ce3925953ff704e5"
+  },
+  "src/ProjectHub.API/appsettings.Development.json": {
+    "mtime": 1785018345.725083,
+    "ast_hash": "b4df777f68ede84860e70778389897f5",
+    "semantic_hash": "b4df777f68ede84860e70778389897f5"
+  },
+  "src/ProjectHub.API/appsettings.json": {
+    "mtime": 1785018249.2177262,
+    "ast_hash": "5e84cc6f0eb3172fadb4774259c40d54",
+    "semantic_hash": "5e84cc6f0eb3172fadb4774259c40d54"
+  },
+  "src/ProjectHub.API/bin/Debug/net9.0/ProjectHub.API.staticwebassets.endpoints.json": {
+    "mtime": 1784836528.3648884,
+    "ast_hash": "f44ca44dd881261586b84442f2201257",
+    "semantic_hash": "f44ca44dd881261586b84442f2201257"
+  },
+  "src/ProjectHub.API/bin/Debug/net9.0/appsettings.Development.json": {
+    "mtime": 1785018345.725083,
+    "ast_hash": "b4df777f68ede84860e70778389897f5",
+    "semantic_hash": "b4df777f68ede84860e70778389897f5"
+  },
+  "src/ProjectHub.API/bin/Debug/net9.0/appsettings.json": {
+    "mtime": 1785018249.2177262,
+    "ast_hash": "5e84cc6f0eb3172fadb4774259c40d54",
+    "semantic_hash": "5e84cc6f0eb3172fadb4774259c40d54"
+  },
+  "src/ProjectHub.API/obj/ProjectHub.API.csproj.nuget.dgspec.json": {
+    "mtime": 1785017570.605833,
+    "ast_hash": "21aed93334a13db41f1a0acb268d7a14",
+    "semantic_hash": "21aed93334a13db41f1a0acb268d7a14"
+  },
+  "src/ProjectHub.API/obj/project.assets.json": {
+    "mtime": 1785017570.5906966,
+    "ast_hash": "855e7dd674bccbbecb6c44c98bb9de00",
+    "semantic_hash": "855e7dd674bccbbecb6c44c98bb9de00"
+  },
+  "src/ProjectHub.Application/Abstractions/Messaging/ICommand.cs": {
+    "mtime": 1784929454.0754373,
+    "ast_hash": "622a81ddc0bc03c8de4403e78e99b8ae",
+    "semantic_hash": "622a81ddc0bc03c8de4403e78e99b8ae"
+  },
+  "src/ProjectHub.Application/Abstractions/Messaging/ICommandHandler.cs": {
+    "mtime": 1784929493.577799,
+    "ast_hash": "155162f2c3fb253222a1d2427b7a91ff",
+    "semantic_hash": "155162f2c3fb253222a1d2427b7a91ff"
+  },
+  "src/ProjectHub.Application/Abstractions/Messaging/IQuery.cs": {
+    "mtime": 1784929521.485402,
+    "ast_hash": "209336ac101c420049ce8e5da6699d84",
+    "semantic_hash": "209336ac101c420049ce8e5da6699d84"
+  },
+  "src/ProjectHub.Application/Abstractions/Messaging/IQueryHandler.cs": {
+    "mtime": 1784929559.3775811,
+    "ast_hash": "cc0fa4e9d7116f2e0eba9fa5236144d8",
+    "semantic_hash": "cc0fa4e9d7116f2e0eba9fa5236144d8"
+  },
+  "src/ProjectHub.Application/Abstractions/Persistence/IApplicationDbContext.cs": {
+    "mtime": 1784931719.3136299,
+    "ast_hash": "082de573d97fb64e3efc1d7743562104",
+    "semantic_hash": "082de573d97fb64e3efc1d7743562104"
+  },
+  "src/ProjectHub.Application/Abstractions/Persistence/IRepository.cs": {
+    "mtime": 1784931855.8667388,
+    "ast_hash": "5141b6b303109c9921690feb8462510f",
+    "semantic_hash": "5141b6b303109c9921690feb8462510f"
+  },
+  "src/ProjectHub.Application/Abstractions/Persistence/IUnitOfWork.cs": {
+    "mtime": 1784929742.3200293,
+    "ast_hash": "a1de222e130a13ba563315d13ea60c4e",
+    "semantic_hash": "a1de222e130a13ba563315d13ea60c4e"
+  },
+  "src/ProjectHub.Application/Abstractions/Services/ICurrentUser.cs": {
+    "mtime": 1784931990.7946923,
+    "ast_hash": "4448e68ff8a96c5df1b74cc397b0b081",
+    "semantic_hash": "4448e68ff8a96c5df1b74cc397b0b081"
+  },
+  "src/ProjectHub.Application/Abstractions/Services/IDateTimeProvider.cs": {
+    "mtime": 1784931938.4012697,
+    "ast_hash": "076d556581d65b27c471a3e713d3a207",
+    "semantic_hash": "076d556581d65b27c471a3e713d3a207"
+  },
+  "src/ProjectHub.Application/Behaviors/LoggingBehavior.cs": {
+    "mtime": 1784932106.0887852,
+    "ast_hash": "da2d2aa7b7b1c931254e66668de6c74f",
+    "semantic_hash": "da2d2aa7b7b1c931254e66668de6c74f"
+  },
+  "src/ProjectHub.Application/Behaviors/PerformanceBehavior.cs": {
+    "mtime": 1784932201.7414188,
+    "ast_hash": "febed16deb57767f57f5cf44c9cfc1cf",
+    "semantic_hash": "febed16deb57767f57f5cf44c9cfc1cf"
+  },
+  "src/ProjectHub.Application/Behaviors/UnhandledExceptionBehavior.cs": {
+    "mtime": 1784932059.8113117,
+    "ast_hash": "d1e298908deeae37c04df2f5cd207d1b",
+    "semantic_hash": "d1e298908deeae37c04df2f5cd207d1b"
+  },
+  "src/ProjectHub.Application/Behaviors/ValidationBehavior.cs": {
+    "mtime": 1784932149.8336384,
+    "ast_hash": "22df0fc8daeac98b4a6d0063bbd559af",
+    "semantic_hash": "22df0fc8daeac98b4a6d0063bbd559af"
+  },
+  "src/ProjectHub.Application/Common/Error.cs": {
+    "mtime": 1784929594.6957424,
+    "ast_hash": "f569f95194100abcdc602b2f61eedb23",
+    "semantic_hash": "f569f95194100abcdc602b2f61eedb23"
+  },
+  "src/ProjectHub.Application/Common/Exceptions/ConflictException.cs": {
+    "mtime": 1784931680.152521,
+    "ast_hash": "86813b54c1e71435f387fa06c700f0ec",
+    "semantic_hash": "86813b54c1e71435f387fa06c700f0ec"
+  },
+  "src/ProjectHub.Application/Common/Exceptions/NotFoundException.cs": {
+    "mtime": 1784931557.6114485,
+    "ast_hash": "240b62d4f59e9a2cc869db75bdcc9fd2",
+    "semantic_hash": "240b62d4f59e9a2cc869db75bdcc9fd2"
+  },
+  "src/ProjectHub.Application/Common/Exceptions/ValidationException.cs": {
+    "mtime": 1784929681.190783,
+    "ast_hash": "3fdc2b5d893f1ae8e84c47c2f65e9046",
+    "semantic_hash": "3fdc2b5d893f1ae8e84c47c2f65e9046"
+  },
+  "src/ProjectHub.Application/Common/Result.cs": {
+    "mtime": 1784929632.0906181,
+    "ast_hash": "9be2d167b1a34900887ebf24ba049215",
+    "semantic_hash": "9be2d167b1a34900887ebf24ba049215"
+  },
+  "src/ProjectHub.Application/DependencyInjection.cs": {
+    "mtime": 1784932242.9780626,
+    "ast_hash": "41235e13eb433a349e7e6ec9b00c0796",
+    "semantic_hash": "41235e13eb433a349e7e6ec9b00c0796"
+  },
+  "src/ProjectHub.Application/ProjectHub.Application.csproj": {
+    "mtime": 1784931813.9350126,
+    "ast_hash": "2e8ac5c23e48b2d88d4811e56bc8694e",
+    "semantic_hash": "2e8ac5c23e48b2d88d4811e56bc8694e"
+  },
+  "src/ProjectHub.Application/obj/ProjectHub.Application.csproj.nuget.dgspec.json": {
+    "mtime": 1785016104.9566984,
+    "ast_hash": "79bd34ed34465ac62ad8db8ae86ebc20",
+    "semantic_hash": "79bd34ed34465ac62ad8db8ae86ebc20"
+  },
+  "src/ProjectHub.Application/obj/project.assets.json": {
+    "mtime": 1784931820.6351123,
+    "ast_hash": "ebd1e428e29c028f461dc578561cc4c3",
+    "semantic_hash": "ebd1e428e29c028f461dc578561cc4c3"
+  },
+  "src/ProjectHub.Domain/Abstractions/IAggregateRoot.cs": {
+    "mtime": 1784839349.040059,
+    "ast_hash": "e87901191e7b6281db841099aefd24a3",
+    "semantic_hash": "e87901191e7b6281db841099aefd24a3"
+  },
+  "src/ProjectHub.Domain/Abstractions/IDomainEvent.cs": {
+    "mtime": 1784839347.8503737,
+    "ast_hash": "6ad7b5e694bdb68edc212704eb05495a",
+    "semantic_hash": "6ad7b5e694bdb68edc212704eb05495a"
+  },
+  "src/ProjectHub.Domain/Common/Guard.cs": {
+    "mtime": 1784840991.0651846,
+    "ast_hash": "01bbbb361765274b2230f1b6177eb5ce",
+    "semantic_hash": "01bbbb361765274b2230f1b6177eb5ce"
+  },
+  "src/ProjectHub.Domain/Entities/Attachment.cs": {
+    "mtime": 1784911683.7317176,
+    "ast_hash": "18015f255141b94303037dcb96fcf38b",
+    "semantic_hash": "18015f255141b94303037dcb96fcf38b"
+  },
+  "src/ProjectHub.Domain/Entities/AuditLog.cs": {
+    "mtime": 1784913787.4724152,
+    "ast_hash": "1a793c95209dec804aa8e242e2fb994f",
+    "semantic_hash": "1a793c95209dec804aa8e242e2fb994f"
+  },
+  "src/ProjectHub.Domain/Entities/Comment.cs": {
+    "mtime": 1784911611.7646708,
+    "ast_hash": "33c1b74c018b2569cf7ab37035aacb5d",
+    "semantic_hash": "33c1b74c018b2569cf7ab37035aacb5d"
+  },
+  "src/ProjectHub.Domain/Entities/Notification.cs": {
+    "mtime": 1784913687.0411322,
+    "ast_hash": "0ee7316f11b1d4fcc64a17c3f718bc67",
+    "semantic_hash": "0ee7316f11b1d4fcc64a17c3f718bc67"
+  },
+  "src/ProjectHub.Domain/Entities/Project.cs": {
+    "mtime": 1784910270.125772,
+    "ast_hash": "15dc58c368db5024ab01229f6a897230",
+    "semantic_hash": "15dc58c368db5024ab01229f6a897230"
+  },
+  "src/ProjectHub.Domain/Entities/ProjectMember.cs": {
+    "mtime": 1784910215.4779239,
+    "ast_hash": "97c191bedbb334632ca5f1d8d1de2598",
+    "semantic_hash": "97c191bedbb334632ca5f1d8d1de2598"
+  },
+  "src/ProjectHub.Domain/Entities/ProjectTask.cs": {
+    "mtime": 1784884692.1424801,
+    "ast_hash": "46f55e1ee7784f9e5c4680268ecfbea8",
+    "semantic_hash": "46f55e1ee7784f9e5c4680268ecfbea8"
+  },
+  "src/ProjectHub.Domain/Entities/Role.cs": {
+    "mtime": 1784905946.3481283,
+    "ast_hash": "573be3eee76a1bd8d8d52e9dcdaf9008",
+    "semantic_hash": "573be3eee76a1bd8d8d52e9dcdaf9008"
+  },
+  "src/ProjectHub.Domain/Entities/Sprint.cs": {
+    "mtime": 1784905395.7689705,
+    "ast_hash": "ae587498cdf8536f7e705a1e1ff56053",
+    "semantic_hash": "ae587498cdf8536f7e705a1e1ff56053"
+  },
+  "src/ProjectHub.Domain/Entities/User.cs": {
+    "mtime": 1784906040.269619,
+    "ast_hash": "8af41b28fe9b5c19c607e3e950008d40",
+    "semantic_hash": "8af41b28fe9b5c19c607e3e950008d40"
+  },
+  "src/ProjectHub.Domain/Entities/UserRole.cs": {
+    "mtime": 1784905989.5417256,
+    "ast_hash": "bb31f208ecb7ad8afaa9a0b9a247f08f",
+    "semantic_hash": "bb31f208ecb7ad8afaa9a0b9a247f08f"
+  },
+  "src/ProjectHub.Domain/Enums/NotificationType.cs": {
+    "mtime": 1784913629.5240288,
+    "ast_hash": "09536213cf21c86872f10a042afcca82",
+    "semantic_hash": "09536213cf21c86872f10a042afcca82"
+  },
+  "src/ProjectHub.Domain/Enums/ProjectRole.cs": {
+    "mtime": 1784910113.7824693,
+    "ast_hash": "905f36637c95a6fa3c26ebe6cfd5aa7e",
+    "semantic_hash": "905f36637c95a6fa3c26ebe6cfd5aa7e"
+  },
+  "src/ProjectHub.Domain/Enums/ProjectStatus.cs": {
+    "mtime": 1784875072.7175038,
+    "ast_hash": "c2a980d39adb068688029bcacc08d6ca",
+    "semantic_hash": "c2a980d39adb068688029bcacc08d6ca"
+  },
+  "src/ProjectHub.Domain/Enums/SprintStatus.cs": {
+    "mtime": 1784905120.0784743,
+    "ast_hash": "6cfc523071bf5cdf37f4c6a35f3045e8",
+    "semantic_hash": "6cfc523071bf5cdf37f4c6a35f3045e8"
+  },
+  "src/ProjectHub.Domain/Enums/TaskPriority.cs": {
+    "mtime": 1784884523.0345354,
+    "ast_hash": "e699ee99a68cfde1e5e53f9d8bbb844f",
+    "semantic_hash": "e699ee99a68cfde1e5e53f9d8bbb844f"
+  },
+  "src/ProjectHub.Domain/Enums/TaskStatus.cs": {
+    "mtime": 1784884640.5522232,
+    "ast_hash": "44d9b84d5f7d50b450afc0213bc3cb30",
+    "semantic_hash": "44d9b84d5f7d50b450afc0213bc3cb30"
+  },
+  "src/ProjectHub.Domain/Events/AttachmentUploadedDomainEvent.cs": {
+    "mtime": 1784911658.6939964,
+    "ast_hash": "468f617d589975311087d203b43fb973",
+    "semantic_hash": "468f617d589975311087d203b43fb973"
+  },
+  "src/ProjectHub.Domain/Events/CommentAddedDomainEvent.cs": {
+    "mtime": 1784911570.9849927,
+    "ast_hash": "4b7e68d24ee9f363515ba35709c46dc2",
+    "semantic_hash": "4b7e68d24ee9f363515ba35709c46dc2"
+  },
+  "src/ProjectHub.Domain/Events/CommentEditedDomainEvent.cs": {
+    "mtime": 1784911577.7021768,
+    "ast_hash": "ed067d911f125a1340def2c098a20faf",
+    "semantic_hash": "ed067d911f125a1340def2c098a20faf"
+  },
+  "src/ProjectHub.Domain/Events/NotificationCreatedDomainEvent.cs": {
+    "mtime": 1784913652.3917632,
+    "ast_hash": "e9d8b68ec183331f1bcebb824f4e9b82",
+    "semantic_hash": "e9d8b68ec183331f1bcebb824f4e9b82"
+  },
+  "src/ProjectHub.Domain/Events/NotificationReadDomainEvent.cs": {
+    "mtime": 1784913658.3642094,
+    "ast_hash": "dfec6117efaf6007cac0dc62d121e332",
+    "semantic_hash": "dfec6117efaf6007cac0dc62d121e332"
+  },
+  "src/ProjectHub.Domain/Events/ProjectArchivedDomainEvent.cs": {
+    "mtime": 1784875075.4250913,
+    "ast_hash": "93f8fb725138f3ae229c517a1afded0a",
+    "semantic_hash": "93f8fb725138f3ae229c517a1afded0a"
+  },
+  "src/ProjectHub.Domain/Events/ProjectCreatedDomainEvent.cs": {
+    "mtime": 1784875073.8744986,
+    "ast_hash": "2ec65f08cc5b3c2fbe5439d20b8174c1",
+    "semantic_hash": "2ec65f08cc5b3c2fbe5439d20b8174c1"
+  },
+  "src/ProjectHub.Domain/Events/ProjectMemberAddedDomainEvent.cs": {
+    "mtime": 1784910178.8642056,
+    "ast_hash": "d9e6cc6b80864c2eb914dc4eac0d94ab",
+    "semantic_hash": "d9e6cc6b80864c2eb914dc4eac0d94ab"
+  },
+  "src/ProjectHub.Domain/Events/ProjectMemberRemovedDomainEvent.cs": {
+    "mtime": 1784910191.3620598,
+    "ast_hash": "9df3588bf7ee4bb65d091adb5c2b5268",
+    "semantic_hash": "9df3588bf7ee4bb65d091adb5c2b5268"
+  },
+  "src/ProjectHub.Domain/Events/ProjectMemberRoleChangedDomainEvent.cs": {
+    "mtime": 1784910184.727367,
+    "ast_hash": "65cc40264c9fd9355a4b288d9f385e1b",
+    "semantic_hash": "65cc40264c9fd9355a4b288d9f385e1b"
+  },
+  "src/ProjectHub.Domain/Events/SprintCompletedDomainEvent.cs": {
+    "mtime": 1784905335.6911583,
+    "ast_hash": "9bec0969729ca52cf50b3ffb71e2c2f0",
+    "semantic_hash": "9bec0969729ca52cf50b3ffb71e2c2f0"
+  },
+  "src/ProjectHub.Domain/Events/SprintStartedDomainEvent.cs": {
+    "mtime": 1784905275.6707788,
+    "ast_hash": "3f442af5045e41bbf3eba13b2bfd4c81",
+    "semantic_hash": "3f442af5045e41bbf3eba13b2bfd4c81"
+  },
+  "src/ProjectHub.Domain/Events/TaskAssignedDomainEvent.cs": {
+    "mtime": 1784884589.6334126,
+    "ast_hash": "3523b60f58c7882f62dcd7b302c25787",
+    "semantic_hash": "3523b60f58c7882f62dcd7b302c25787"
+  },
+  "src/ProjectHub.Domain/Events/TaskCreatedDomainEvent.cs": {
+    "mtime": 1784884569.0644538,
+    "ast_hash": "f6223bdd21af46f5b815d101990de21c",
+    "semantic_hash": "f6223bdd21af46f5b815d101990de21c"
+  },
+  "src/ProjectHub.Domain/Events/TaskStatusChangedDomainEvent.cs": {
+    "mtime": 1784884662.0981991,
+    "ast_hash": "ca633b0864e29bf6f12b2a5fde4ad29c",
+    "semantic_hash": "ca633b0864e29bf6f12b2a5fde4ad29c"
+  },
+  "src/ProjectHub.Domain/Events/UserRegisteredDomainEvent.cs": {
+    "mtime": 1784905966.275201,
+    "ast_hash": "555877a6190792ab5515343f16fd9d3b",
+    "semantic_hash": "555877a6190792ab5515343f16fd9d3b"
+  },
+  "src/ProjectHub.Domain/Events/UserRoleAssignedDomainEvent.cs": {
+    "mtime": 1784905971.8542862,
+    "ast_hash": "6155d2c513ae8aca4a5d8f9cf03d7ed9",
+    "semantic_hash": "6155d2c513ae8aca4a5d8f9cf03d7ed9"
+  },
+  "src/ProjectHub.Domain/Exceptions/DomainException.cs": {
+    "mtime": 1784840989.4185002,
+    "ast_hash": "9ec9d2c316c543d53c20f2fabc9793b3",
+    "semantic_hash": "9ec9d2c316c543d53c20f2fabc9793b3"
+  },
+  "src/ProjectHub.Domain/Primitives/AggregateRoot.cs": {
+    "mtime": 1784839350.9910307,
+    "ast_hash": "4029bcbc6f0499cd6d17338f06d2e0ae",
+    "semantic_hash": "4029bcbc6f0499cd6d17338f06d2e0ae"
+  },
+  "src/ProjectHub.Domain/Primitives/Entity.cs": {
+    "mtime": 1784839350.0583043,
+    "ast_hash": "ffc5ce78a63538184e4d50213dc00564",
+    "semantic_hash": "ffc5ce78a63538184e4d50213dc00564"
+  },
+  "src/ProjectHub.Domain/Primitives/ValueObject.cs": {
+    "mtime": 1784839351.9520931,
+    "ast_hash": "a318425bf29d40d65d8e46e86981823b",
+    "semantic_hash": "a318425bf29d40d65d8e46e86981823b"
+  },
+  "src/ProjectHub.Domain/ProjectHub.Domain.csproj": {
+    "mtime": 1784836354.2348073,
+    "ast_hash": "a179c1fd32442fdc3ca095a8084e072a",
+    "semantic_hash": "a179c1fd32442fdc3ca095a8084e072a"
+  },
+  "src/ProjectHub.Domain/ValueObjects/CommentBody.cs": {
+    "mtime": 1784911429.141463,
+    "ast_hash": "a4c5909b6d5681401e361373c32732f9",
+    "semantic_hash": "a4c5909b6d5681401e361373c32732f9"
+  },
+  "src/ProjectHub.Domain/ValueObjects/DateRange.cs": {
+    "mtime": 1784905244.14597,
+    "ast_hash": "0dbf145479b3034fecb074339c692416",
+    "semantic_hash": "0dbf145479b3034fecb074339c692416"
+  },
+  "src/ProjectHub.Domain/ValueObjects/Email.cs": {
+    "mtime": 1784905926.9292614,
+    "ast_hash": "1b467226201c8897120b8abb8bd9b6f9",
+    "semantic_hash": "1b467226201c8897120b8abb8bd9b6f9"
+  },
+  "src/ProjectHub.Domain/ValueObjects/FileMetadata.cs": {
+    "mtime": 1784911638.013551,
+    "ast_hash": "b00ed21fdc6307cb7a3eae815d3620c8",
+    "semantic_hash": "b00ed21fdc6307cb7a3eae815d3620c8"
+  },
+  "src/ProjectHub.Domain/ValueObjects/ProjectName.cs": {
+    "mtime": 1784841296.7487304,
+    "ast_hash": "d864c23299d22a6c68e9adc1510bb114",
+    "semantic_hash": "d864c23299d22a6c68e9adc1510bb114"
+  },
+  "src/ProjectHub.Domain/ValueObjects/TaskTitle.cs": {
+    "mtime": 1784884546.6913922,
+    "ast_hash": "a8222480a770b72874df6972654d5ba6",
+    "semantic_hash": "a8222480a770b72874df6972654d5ba6"
+  },
+  "src/ProjectHub.Domain/obj/Debug/net9.0/ProjectHub.Domain.sourcelink.json": {
+    "mtime": 1785018369.1317563,
+    "ast_hash": "eb4412bd4fc4e3fd7a76f09d0a2f84b2",
+    "semantic_hash": "eb4412bd4fc4e3fd7a76f09d0a2f84b2"
+  },
+  "src/ProjectHub.Domain/obj/ProjectHub.Domain.csproj.nuget.dgspec.json": {
+    "mtime": 1784890969.7751088,
+    "ast_hash": "8189eb2126c92ebe718dd88f8acb9a27",
+    "semantic_hash": "8189eb2126c92ebe718dd88f8acb9a27"
+  },
+  "src/ProjectHub.Domain/obj/project.assets.json": {
+    "mtime": 1784890969.754481,
+    "ast_hash": "7d19cef7b8f70a7600a9649f22c3f307",
+    "semantic_hash": "7d19cef7b8f70a7600a9649f22c3f307"
+  },
+  "src/ProjectHub.Infrastructure/ProjectHub.Infrastructure.csproj": {
+    "mtime": 1785016097.5648844,
+    "ast_hash": "05db5ab3892c8d93e5ceb0ac83ddd381",
+    "semantic_hash": "05db5ab3892c8d93e5ceb0ac83ddd381"
+  },
+  "src/ProjectHub.Infrastructure/obj/ProjectHub.Infrastructure.csproj.nuget.dgspec.json": {
+    "mtime": 1785016104.9617524,
+    "ast_hash": "2ca51f095823e16ad8e8b7862d1fef68",
+    "semantic_hash": "2ca51f095823e16ad8e8b7862d1fef68"
+  },
+  "src/ProjectHub.Infrastructure/obj/project.assets.json": {
+    "mtime": 1785016104.9329717,
+    "ast_hash": "753a3b2bbcb8247e5fc27ce29dce031e",
+    "semantic_hash": "753a3b2bbcb8247e5fc27ce29dce031e"
+  },
+  "src/ProjectHub.Persistence/Class1.cs": {
+    "mtime": 1784836358.277994,
+    "ast_hash": "02a265756f06cd63950755b4487adaa5",
+    "semantic_hash": "02a265756f06cd63950755b4487adaa5"
+  },
+  "src/ProjectHub.Persistence/ProjectHub.Persistence.csproj": {
+    "mtime": 1785012435.8994145,
+    "ast_hash": "bcdb08ec97da2b3bad00393aa307c8dd",
+    "semantic_hash": "bcdb08ec97da2b3bad00393aa307c8dd"
+  },
+  "src/ProjectHub.Persistence/obj/ProjectHub.Persistence.csproj.nuget.dgspec.json": {
+    "mtime": 1785016105.0077608,
+    "ast_hash": "ab257d669bac7956e80b8d6218f0e06e",
+    "semantic_hash": "ab257d669bac7956e80b8d6218f0e06e"
+  },
+  "src/ProjectHub.Persistence/obj/project.assets.json": {
+    "mtime": 1785016105.00267,
+    "ast_hash": "6914199cefed1a2ba4c95c85b60aa595",
+    "semantic_hash": "6914199cefed1a2ba4c95c85b60aa595"
+  },
+  "src/ProjectHub.Web/Components/App.razor": {
+    "mtime": 1784836366.699163,
+    "ast_hash": "18073bc721ef5573e73d8f917616d77e",
+    "semantic_hash": "18073bc721ef5573e73d8f917616d77e"
+  },
+  "src/ProjectHub.Web/Components/Layout/MainLayout.razor": {
+    "mtime": 1784836366.783417,
+    "ast_hash": "75c29fc34d23b44674da8967cc116287",
+    "semantic_hash": "75c29fc34d23b44674da8967cc116287"
+  },
+  "src/ProjectHub.Web/Components/Layout/NavMenu.razor": {
+    "mtime": 1784836366.8454075,
+    "ast_hash": "f9d583784265b53f200ea65ace416dfa",
+    "semantic_hash": "f9d583784265b53f200ea65ace416dfa"
+  },
+  "src/ProjectHub.Web/Components/Pages/Counter.razor": {
+    "mtime": 1784836366.8526087,
+    "ast_hash": "e6ee184864dfca49bd187e288e7461bb",
+    "semantic_hash": "e6ee184864dfca49bd187e288e7461bb"
+  },
+  "src/ProjectHub.Web/Components/Pages/Error.razor": {
+    "mtime": 1784836366.8566072,
+    "ast_hash": "895aa385b310af50d09fd583be83b251",
+    "semantic_hash": "895aa385b310af50d09fd583be83b251"
+  },
+  "src/ProjectHub.Web/Components/Pages/Home.razor": {
+    "mtime": 1784836366.8661757,
+    "ast_hash": "2f5e8a5cde22b2d4d82154b7b0ed5197",
+    "semantic_hash": "2f5e8a5cde22b2d4d82154b7b0ed5197"
+  },
+  "src/ProjectHub.Web/Components/Pages/Weather.razor": {
+    "mtime": 1784836366.870158,
+    "ast_hash": "b3dbefcd62deb9f24000d3f17dd38013",
+    "semantic_hash": "b3dbefcd62deb9f24000d3f17dd38013"
+  },
+  "src/ProjectHub.Web/Components/Routes.razor": {
+    "mtime": 1784836366.7115636,
+    "ast_hash": "716262f2d21bebb4bcf9aecee6e00f64",
+    "semantic_hash": "716262f2d21bebb4bcf9aecee6e00f64"
+  },
+  "src/ProjectHub.Web/Components/_Imports.razor": {
+    "mtime": 1784836366.716555,
+    "ast_hash": "c7c4c898fa4d8464759a5838913d4878",
+    "semantic_hash": "c7c4c898fa4d8464759a5838913d4878"
+  },
+  "src/ProjectHub.Web/Program.cs": {
+    "mtime": 1784836366.8393147,
+    "ast_hash": "56b4908ade6ae2826689ad259c06a122",
+    "semantic_hash": "56b4908ade6ae2826689ad259c06a122"
+  },
+  "src/ProjectHub.Web/ProjectHub.Web.csproj": {
+    "mtime": 1784836428.1741185,
+    "ast_hash": "3a67b971cb8795c8bb7df0c3d5e61979",
+    "semantic_hash": "3a67b971cb8795c8bb7df0c3d5e61979"
+  },
+  "src/ProjectHub.Web/Properties/launchSettings.json": {
+    "mtime": 1784836366.7468762,
+    "ast_hash": "b0c2a1ad3b000bd4cbe0c738ad56eec0",
+    "semantic_hash": "b0c2a1ad3b000bd4cbe0c738ad56eec0"
+  },
+  "src/ProjectHub.Web/appsettings.Development.json": {
+    "mtime": 1784836366.7735627,
+    "ast_hash": "804b473502a4c415cf75db61c56c32aa",
+    "semantic_hash": "804b473502a4c415cf75db61c56c32aa"
+  },
+  "src/ProjectHub.Web/appsettings.json": {
+    "mtime": 1784836366.7763638,
+    "ast_hash": "f7e65dde4e5533740a0d57ac9355c0e8",
+    "semantic_hash": "f7e65dde4e5533740a0d57ac9355c0e8"
+  },
+  "src/ProjectHub.Web/obj/ProjectHub.Web.csproj.nuget.dgspec.json": {
+    "mtime": 1784931820.7591524,
+    "ast_hash": "baa2186969da4509e2af11f272c3f7f2",
+    "semantic_hash": "baa2186969da4509e2af11f272c3f7f2"
+  },
+  "src/ProjectHub.Web/obj/project.assets.json": {
+    "mtime": 1784931820.7199438,
+    "ast_hash": "283501e65b0571060a1171cbcfc6d67d",
+    "semantic_hash": "283501e65b0571060a1171cbcfc6d67d"
+  },
+  "tests/ProjectHub.Application.Tests/ProjectHub.Application.Tests.csproj": {
+    "mtime": 1784836429.0418277,
+    "ast_hash": "7aea4aff337874deb53cb5a698f3799f",
+    "semantic_hash": "7aea4aff337874deb53cb5a698f3799f"
+  },
+  "tests/ProjectHub.Application.Tests/UnitTest1.cs": {
+    "mtime": 1784836369.541173,
+    "ast_hash": "d69c50b1bdc9358bdeab90a22c4edc91",
+    "semantic_hash": "d69c50b1bdc9358bdeab90a22c4edc91"
+  },
+  "tests/ProjectHub.Application.Tests/obj/ProjectHub.Application.Tests.csproj.nuget.dgspec.json": {
+    "mtime": 1784931820.794951,
+    "ast_hash": "41690e655f3609d15be31c6de6a5a3f7",
+    "semantic_hash": "41690e655f3609d15be31c6de6a5a3f7"
+  },
+  "tests/ProjectHub.Application.Tests/obj/project.assets.json": {
+    "mtime": 1784931820.752138,
+    "ast_hash": "0d6bf87a7505ed7259b4993183ab874c",
+    "semantic_hash": "0d6bf87a7505ed7259b4993183ab874c"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/AttachmentTests.cs": {
+    "mtime": 1784911743.3465717,
+    "ast_hash": "308272ae59420c0e27f065e887917028",
+    "semantic_hash": "308272ae59420c0e27f065e887917028"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/AuditLogTests.cs": {
+    "mtime": 1784913898.2149599,
+    "ast_hash": "675b1bed6540c1ca2d1b6a846137a3b0",
+    "semantic_hash": "675b1bed6540c1ca2d1b6a846137a3b0"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/CommentTests.cs": {
+    "mtime": 1784911712.6599278,
+    "ast_hash": "3ec519a9f0be21b87a5f44f5c27ec500",
+    "semantic_hash": "3ec519a9f0be21b87a5f44f5c27ec500"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/NotificationTests.cs": {
+    "mtime": 1784913847.9185503,
+    "ast_hash": "a1d12d0bc546a933489ebe659d190d12",
+    "semantic_hash": "a1d12d0bc546a933489ebe659d190d12"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/ProjectMemberTests.cs": {
+    "mtime": 1784910304.931127,
+    "ast_hash": "5b1189855db0ab40d0a1e26ef9858754",
+    "semantic_hash": "5b1189855db0ab40d0a1e26ef9858754"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/ProjectTaskTests.cs": {
+    "mtime": 1784884723.1071258,
+    "ast_hash": "a47eaaed8beb4bd3751fdedd04dfe915",
+    "semantic_hash": "a47eaaed8beb4bd3751fdedd04dfe915"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/ProjectTests.cs": {
+    "mtime": 1784875543.6855571,
+    "ast_hash": "7c6fca067b77cb1df282777aea1fd789",
+    "semantic_hash": "7c6fca067b77cb1df282777aea1fd789"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/SprintTests.cs": {
+    "mtime": 1784905425.8217587,
+    "ast_hash": "10e84d604fef0709ac67e934b6997a39",
+    "semantic_hash": "10e84d604fef0709ac67e934b6997a39"
+  },
+  "tests/ProjectHub.Domain.Tests/Entities/UserTests.cs": {
+    "mtime": 1784906094.971294,
+    "ast_hash": "0ddb17ad4199041b6c089f34a7427f93",
+    "semantic_hash": "0ddb17ad4199041b6c089f34a7427f93"
+  },
+  "tests/ProjectHub.Domain.Tests/ProjectHub.Domain.Tests.csproj": {
+    "mtime": 1784836429.7775953,
+    "ast_hash": "af1dcd71df6c486dbee1d610b167adf6",
+    "semantic_hash": "af1dcd71df6c486dbee1d610b167adf6"
+  },
+  "tests/ProjectHub.Domain.Tests/UnitTest1.cs": {
+    "mtime": 1784875474.0601099,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "tests/ProjectHub.Domain.Tests/obj/Debug/net9.0/ProjectHub.Domain.Tests.sourcelink.json": {
+    "mtime": 1784932733.581812,
+    "ast_hash": "2ff908fda2f88ebb5bb2fd76b71f4b53",
+    "semantic_hash": "2ff908fda2f88ebb5bb2fd76b71f4b53"
+  },
+  "tests/ProjectHub.Domain.Tests/obj/ProjectHub.Domain.Tests.csproj.nuget.dgspec.json": {
+    "mtime": 1784890969.9329014,
+    "ast_hash": "e7f165356e3363be170d1053040ce869",
+    "semantic_hash": "e7f165356e3363be170d1053040ce869"
+  },
+  "tests/ProjectHub.Domain.Tests/obj/project.assets.json": {
+    "mtime": 1784890969.9253063,
+    "ast_hash": "04e7029fa0fd0e9907cc2ff04edad23d",
+    "semantic_hash": "04e7029fa0fd0e9907cc2ff04edad23d"
+  },
+  "src/ProjectHub.Application/Abstractions/Messaging/DomainEventNotification.cs": {
+    "mtime": 1785012501.2949536,
+    "ast_hash": "0d9e6191dfe01de82e3b7c8a5f1a914b",
+    "semantic_hash": "0d9e6191dfe01de82e3b7c8a5f1a914b"
+  },
+  "src/ProjectHub.Persistence/ApplicationDbContext.cs": {
+    "mtime": 1785014211.0978963,
+    "ast_hash": "4f59ad33666d5ec623fc3b8993de7416",
+    "semantic_hash": "4f59ad33666d5ec623fc3b8993de7416"
+  },
+  "src/ProjectHub.Persistence/Configurations/AttachmentConfiguration.cs": {
+    "mtime": 1785013040.7280076,
+    "ast_hash": "0be899d9e56f9be7d1b1ee0dba016efc",
+    "semantic_hash": "0be899d9e56f9be7d1b1ee0dba016efc"
+  },
+  "src/ProjectHub.Persistence/Configurations/AuditLogConfiguration.cs": {
+    "mtime": 1785013111.9906013,
+    "ast_hash": "d4b07fc714ea690a56666f7d8563f23e",
+    "semantic_hash": "d4b07fc714ea690a56666f7d8563f23e"
+  },
+  "src/ProjectHub.Persistence/Configurations/CommentConfiguration.cs": {
+    "mtime": 1785012944.3188806,
+    "ast_hash": "58f1a81c4d30266723d654fe5aad4565",
+    "semantic_hash": "58f1a81c4d30266723d654fe5aad4565"
+  },
+  "src/ProjectHub.Persistence/Configurations/EntityConfiguration.cs": {
+    "mtime": 1785012600.7002468,
+    "ast_hash": "69779740699b66c0d28c0c4ab69eb555",
+    "semantic_hash": "69779740699b66c0d28c0c4ab69eb555"
+  },
+  "src/ProjectHub.Persistence/Configurations/NotificationConfiguration.cs": {
+    "mtime": 1785013064.337952,
+    "ast_hash": "63b513001de4fb9f2bb83bd0df503323",
+    "semantic_hash": "63b513001de4fb9f2bb83bd0df503323"
+  },
+  "src/ProjectHub.Persistence/Configurations/ProjectConfiguration.cs": {
+    "mtime": 1785012778.284328,
+    "ast_hash": "55e17e2a820eb14c0f9d8ee5f9b93ec9",
+    "semantic_hash": "55e17e2a820eb14c0f9d8ee5f9b93ec9"
+  },
+  "src/ProjectHub.Persistence/Configurations/ProjectMemberConfiguration.cs": {
+    "mtime": 1785012799.0761638,
+    "ast_hash": "87ffb86b137deb0a63a154710cbe430f",
+    "semantic_hash": "87ffb86b137deb0a63a154710cbe430f"
+  },
+  "src/ProjectHub.Persistence/Configurations/ProjectTaskConfiguration.cs": {
+    "mtime": 1785012823.7563517,
+    "ast_hash": "19d68fc2899614defbfd3fac5ec4eae6",
+    "semantic_hash": "19d68fc2899614defbfd3fac5ec4eae6"
+  },
+  "src/ProjectHub.Persistence/Configurations/RoleConfiguration.cs": {
+    "mtime": 1785012733.080679,
+    "ast_hash": "5ff38be9b09fd4d3e43f08a14c1d8d24",
+    "semantic_hash": "5ff38be9b09fd4d3e43f08a14c1d8d24"
+  },
+  "src/ProjectHub.Persistence/Configurations/SprintConfiguration.cs": {
+    "mtime": 1785012920.5579278,
+    "ast_hash": "7c1f19e45a4a9501e63d7c1d19150ca9",
+    "semantic_hash": "7c1f19e45a4a9501e63d7c1d19150ca9"
+  },
+  "src/ProjectHub.Persistence/Configurations/UserConfiguration.cs": {
+    "mtime": 1785012676.1517332,
+    "ast_hash": "98176293db4286b15dfebebfe2cb533c",
+    "semantic_hash": "98176293db4286b15dfebebfe2cb533c"
+  },
+  "src/ProjectHub.Persistence/Configurations/UserRoleConfiguration.cs": {
+    "mtime": 1785012752.1305213,
+    "ast_hash": "e2caa8c6c63ed69333ad7aebd3ab9fc4",
+    "semantic_hash": "e2caa8c6c63ed69333ad7aebd3ab9fc4"
+  },
+  "src/ProjectHub.Persistence/Constants/Schemas.cs": {
+    "mtime": 1785012564.0780349,
+    "ast_hash": "4a73938756d692c0cef3c7403d6e440b",
+    "semantic_hash": "4a73938756d692c0cef3c7403d6e440b"
+  },
+  "src/ProjectHub.Persistence/DependencyInjection.cs": {
+    "mtime": 1785018480.5516024,
+    "ast_hash": "a307fa4ff3ea1b5fbb6854001f19e7a3",
+    "semantic_hash": "a307fa4ff3ea1b5fbb6854001f19e7a3"
+  },
+  "src/ProjectHub.Persistence/Interceptors/PublishDomainEventsInterceptor.cs": {
+    "mtime": 1785012632.276466,
+    "ast_hash": "67704aa216928fe0245fb18a1e000f00",
+    "semantic_hash": "67704aa216928fe0245fb18a1e000f00"
+  },
+  "src/ProjectHub.Persistence/Interceptors/SoftDeleteInterceptor.cs": {
+    "mtime": 1785014163.080705,
+    "ast_hash": "c4e18ba9b48f52bc9b77e31a72681816",
+    "semantic_hash": "c4e18ba9b48f52bc9b77e31a72681816"
+  },
+  "src/ProjectHub.Persistence/Repositories/Repository.cs": {
+    "mtime": 1785014236.8567946,
+    "ast_hash": "a74813c3552f2d0120aec5047f2e1425",
+    "semantic_hash": "a74813c3552f2d0120aec5047f2e1425"
+  },
+  "src/ProjectHub.Persistence/UnitOfWork.cs": {
+    "mtime": 1785014274.487179,
+    "ast_hash": "05fee9bd73a276b3cac150d931c0cec3",
+    "semantic_hash": "05fee9bd73a276b3cac150d931c0cec3"
+  },
+  "src/ProjectHub.Persistence/bin/Debug/net9.0/ProjectHub.Persistence.runtimeconfig.json": {
+    "mtime": 1785018503.3202782,
+    "ast_hash": "76a5349e8306b8feba69318ab97089a6",
+    "semantic_hash": "76a5349e8306b8feba69318ab97089a6"
+  },
+  "src/ProjectHub.Infrastructure/DependencyInjection.cs": {
+    "mtime": 1785016192.572536,
+    "ast_hash": "276d05675561577db6d0645911cd41c3",
+    "semantic_hash": "276d05675561577db6d0645911cd41c3"
+  },
+  "src/ProjectHub.Infrastructure/Services/CurrentUser.cs": {
+    "mtime": 1785016166.0347798,
+    "ast_hash": "782cb86ecd50205f311a22e30f5268f3",
+    "semantic_hash": "782cb86ecd50205f311a22e30f5268f3"
+  },
+  "src/ProjectHub.Infrastructure/Services/DateTimeProvider.cs": {
+    "mtime": 1785016125.342018,
+    "ast_hash": "0e697495c5d9bcc061c9e7b48196e395",
+    "semantic_hash": "0e697495c5d9bcc061c9e7b48196e395"
+  },
+  "src/ProjectHub.API/Infrastructure/GlobalExceptionHandler.cs": {
+    "mtime": 1785017580.4134016,
+    "ast_hash": "22c4906b382a9a393d050860b0554463",
+    "semantic_hash": "22c4906b382a9a393d050860b0554463"
+  }
+}

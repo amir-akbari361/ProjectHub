@@ -1,23 +1,68 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
+@* MudThemeProvider applies the active theme + light/dark palette to every descendant. The @ref lets
+   us read its system-preference in OnAfterRender. MudPopoverProvider hosts menus/tooltips; MudDialogProvider
+   hosts modal dialogs; MudSnackbarProvider hosts toast notifications. All three must live once, at the
+   root, or the corresponding features silently no-op. *@
+<MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudText Typo="Typo.h6">ProjectHub</MudText>
+        <MudSpacer />
+        @* Toggle between light and dark. The icon reflects the *action* (show a sun when dark, so the
+           user knows clicking returns to light). Bound to the same _isDarkMode the provider reads. *@
+        <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                           Color="Color.Inherit"
+                           OnClick="ToggleDarkMode" />
+        </MudTooltip>
+    </MudAppBar>
+
+    <MudDrawer Open="true" Elevation="2" Variant="@DrawerVariant.Mini" OpenMiniOnHover="true">
         <NavMenu />
-    </div>
+    </MudDrawer>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+    <MudMainContent>
+        @* Error boundary catches unhandled exceptions from any child component and shows a friendly
+           fallback instead of tearing down the whole circuit. In dev the raw error still logs. *@
+        <MudContainer MaxWidth="MaxWidth.Large" Class="my-6">
+            <ErrorBoundary>
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent>
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Filled">
+                        Something went wrong while rendering this page. Please reload.
+                    </MudAlert>
+                </ErrorContent>
+            </ErrorBoundary>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+@code {
+    private MudThemeProvider _themeProvider = null!;
+    private bool _isDarkMode;
 
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
-</div>
+    // A single shared theme instance. Defining it here (rather than inline) means every page inherits
+    // the same palette/typography and we have one place to brand the app later.
+    private readonly MudTheme _theme = new();
+
+    // On first render we can call JS interop, so we ask the browser for its OS-level colour preference
+    // and honour it. OnAfterRenderAsync (not OnInitialized) because interop is unavailable during
+    // server prerendering. StateHasChanged forces a re-render with the resolved value.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isDarkMode = await _themeProvider.GetSystemPreference();
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;
+}

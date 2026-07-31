@@ -30,7 +30,8 @@ try
     // -----------------------------------------------------------------------------------------
     builder.Services.AddApplication();
     builder.Services.AddPersistence(builder.Configuration);
-    builder.Services.AddInfrastructure();
+    builder.Services.AddInfrastructure(builder.Configuration);
+
 
     // Framework-native exception handling: our IExceptionHandler + the built-in ProblemDetails
     // service together produce RFC 7807 responses. AddProblemDetails() must be present or
