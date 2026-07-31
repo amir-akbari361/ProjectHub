@@ -1,5 +1,9 @@
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using ProjectHub.Application.Abstractions.Authentication;
 using ProjectHub.Application.Abstractions.Services;
 using ProjectHub.Infrastructure.Authentication;
@@ -7,6 +11,7 @@ using ProjectHub.Infrastructure.Email;
 using ProjectHub.Infrastructure.Services;
 
 namespace ProjectHub.Infrastructure;
+
 
 /// <summary>
 /// The Infrastructure composition root. Hosts (API, Web) call <see cref="AddInfrastructure"/> so the
@@ -80,7 +85,46 @@ public static class DependencyInjection
     }
 
     /// <summary>
+    /// Registers the JWT Bearer authentication scheme so the API can VERIFY incoming access tokens.
+    /// This lives in Infrastructure — not the host — because it is the only layer that can see the
+    /// <see cref="JwtOptions"/> (and thus the RSA key), which are deliberately <c>internal</c>. The host
+    /// simply calls <c>AddJwtAuthentication()</c>, keeping the crypto/config details encapsulated.
+    /// </summary>
+    /// <remarks>
+    /// SIGN vs VERIFY — the two halves of RS256:
+    ///  • <see cref="JwtProvider"/> SIGNS with the RSA PRIVATE key.
+    ///  • This handler VERIFIES with the RSA PUBLIC key.
+    /// An <see cref="RSA"/> instance imported from a private-key PEM already contains the public
+    /// components, so we can reuse it as the <see cref="RsaSecurityKey"/> for validation. In a true
+    /// multi-service topology only the public key would be shipped here; in this single-process app the
+    /// same key material serves both, and that is a deliberate, documented simplification.
+    ///
+    /// We validate EVERY dimension of the token (issuer, audience, lifetime, signature) and set
+    /// <c>ClockSkew = TimeSpan.Zero</c> so a token expires exactly when its "exp" says — the default 5-minute
+    /// skew would silently extend a 15-minute access token's real lifetime by a third, undermining the
+    /// short-lifetime security model. NameClaimType maps "sub" to <c>User.Identity.Name</c>/<c>ClaimTypes.NameIdentifier</c>
+    /// so downstream code reads the user id the conventional way.
+    /// </remarks>
+    public static IServiceCollection AddJwtAuthentication(this IServiceCollection services)
+    {
+        services
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer();
+
+        // Bearer options depend on the validated JwtOptions, which aren't available until the container
+        // is built. ConfigureOptions with an IConfigureOptions<JwtBearerOptions> lets us inject
+        // IOptions<JwtOptions> and build the RSA key ONCE, at first resolution, rather than per request.
+        services.ConfigureOptions<ConfigureJwtBearerOptions>();
+
+        // Authorization services back the [Authorize] attribute and any policies the host declares.
+        services.AddAuthorization();
+
+        return services;
+    }
+
+    /// <summary>
     /// The environment-agnostic RSA key resolver, invoked by <c>PostConfigure&lt;JwtOptions&gt;</c> at
+
     /// startup — AFTER binding, BEFORE validation. Its whole job is to guarantee that, whatever the
     /// environment, <see cref="JwtOptions.PrivateKeyPem"/> holds the actual PEM text by the time the
     /// downstream <c>Validate</c> and <c>JwtProvider</c> run.
