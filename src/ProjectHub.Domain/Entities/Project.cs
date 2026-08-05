@@ -58,11 +58,24 @@ public sealed class Project : AggregateRoot
         MarkUpdated(utcNow, updatedBy);
     }
 
+    public void ChangeDescription(string? newDescription, DateTime utcNow, Guid? updatedBy = null)
+    {
+        if (Status == ProjectStatus.Archived)
+        {
+            throw new DomainException("An archived project cannot be modified.");
+        }
+
+        // Normalize empty/whitespace to null so "" and "   " are stored identically to "no description".
+        Description = string.IsNullOrWhiteSpace(newDescription) ? null : newDescription.Trim();
+        MarkUpdated(utcNow, updatedBy);
+    }
+
     public void Archive(DateTime utcNow, Guid? updatedBy = null)
     {
         if (Status == ProjectStatus.Archived)
         {
             throw new DomainException("The project is already archived.");
+
         }
 
         Status = ProjectStatus.Archived;

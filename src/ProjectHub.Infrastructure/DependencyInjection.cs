@@ -6,9 +6,11 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using ProjectHub.Application.Abstractions.Authentication;
 using ProjectHub.Application.Abstractions.Services;
+using ProjectHub.Application.Abstractions.Storage;
 using ProjectHub.Infrastructure.Authentication;
 using ProjectHub.Infrastructure.Email;
 using ProjectHub.Infrastructure.Services;
+using ProjectHub.Infrastructure.Storage;
 
 namespace ProjectHub.Infrastructure;
 
@@ -80,6 +82,19 @@ public static class DependencyInjection
         // The email sender constructs a transport per call and takes a scoped logger; scoped is the
         // conventional lifetime for an I/O adapter that participates in a request.
         services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+        // Bind + validate the file-storage root at startup (same fail-fast discipline as JWT/SMTP).
+        services
+            .AddOptions<FileStorageOptions>()
+            .Bind(configuration.GetSection(FileStorageOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        // The local disk adapter holds no per-request state (its only field is the immutable root path
+        // resolved once in the constructor) and every operation is a fresh, independent I/O call, so a
+        // single shared Singleton instance is both safe and cheapest. Callers depend on IFileStorage,
+        // never the concrete type — swapping to a cloud adapter is a one-line change right here.
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         return services;
     }
