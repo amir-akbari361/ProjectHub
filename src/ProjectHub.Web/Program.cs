@@ -1,4 +1,8 @@
+using Microsoft.AspNetCore.Components.Authorization;
 using MudBlazor.Services;
+using ProjectHub.Web.Client.Auth;
+
+using ProjectHub.Web.Client.Http;
 using ProjectHub.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,18 +16,31 @@ builder.Services.AddRazorComponents()
 // the JS interop bridge. Without this call the <Mud*> components have no backing services and throw.
 builder.Services.AddMudServices();
 
-// Typed HttpClient for talking to the ProjectHub API. Named "ProjectHubApi" and given a BaseAddress
-// from configuration so the URL differs per environment without code changes. Using the factory
-// (not a hand-newed HttpClient) gives us pooled, correctly-disposed handlers and avoids socket
-// exhaustion. Feature slices will inject IHttpClientFactory (or typed clients) built on this.
+// API base URL from configuration. All typed HTTP clients below will share this base address.
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"]
     ?? throw new InvalidOperationException(
         "'ApiBaseUrl' is not configured. Set it in appsettings so the Web host knows where the API lives.");
 
-builder.Services.AddHttpClient("ProjectHubApi", client =>
-{
-    client.BaseAddress = new Uri(apiBaseUrl);
-});
+// Typed HTTP clients for each API feature slice. Each gets its own HttpClient instance (from the pool)
+// with the shared base address. Components inject these directly rather than using IHttpClientFactory,
+// which keeps the API surface clean and the dependency graph obvious.
+builder.Services.AddHttpClient<AuthApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+builder.Services.AddHttpClient<ProjectsApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+builder.Services.AddHttpClient<TasksApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+builder.Services.AddHttpClient<MembersApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+builder.Services.AddHttpClient<CommentsApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+builder.Services.AddHttpClient<SearchApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+
+// Authentication state: TokenStore holds the JWT/refresh tokens in memory, and the custom
+// AuthenticationStateProvider reads them to determine the current user. Registered as scoped so
+// each SignalR circuit gets its own isolated auth state.
+builder.Services.AddScoped<TokenStore>();
+builder.Services.AddScoped<JwtAuthenticationStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<JwtAuthenticationStateProvider>());
+
+// Blazor's built-in auth services: AuthorizeView, CascadingAuthenticationState, [Authorize] all depend on this.
+builder.Services.AddAuthorizationCore();
 
 var app = builder.Build();
 

@@ -19,6 +19,10 @@
     <!-- MudBlazor: Material-Design component library. Gives us a theme provider, dark mode,
          responsive layout, form inputs with validation adornments, and skeleton loaders. -->
     <PackageReference Include="MudBlazor" Version="7.15.0" />
+    <!-- SignalR client so the browser circuit can subscribe to live notifications pushed by the API hub. -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.0" />
+    <!-- JWT parsing for decoding access tokens client-side (read-only, UI convenience). -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.2.1" />
   </ItemGroup>
 
 </Project>
