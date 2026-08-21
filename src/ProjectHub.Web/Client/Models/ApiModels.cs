@@ -1,4 +1,4 @@
-using ProjectHub.Domain.Enums;
+ using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Web.Client.Models;
 
@@ -133,6 +133,10 @@ public sealed record EditCommentRequest(string Body);
 public sealed class AddCommentResult
 {
     public Guid Id { get; set; }
+
+    // Server-stamped creation time echoed back by the API's AddCommentResponse. Carrying it lets the UI
+    // render the freshly posted comment optimistically (with a correct timestamp) without re-listing.
+    public DateTime CreatedAtUtc { get; set; }
 }
 
 public sealed class CommentItem
@@ -148,15 +152,35 @@ public sealed class CommentItem
 
 // ------------------------------- Attachments -------------------------------
 
+/// <summary>
+/// One row in a task's attachment list. Mirrors the API's <c>AttachmentListItemResponse</c>: metadata
+/// ONLY — never the bytes and never the server-side storage path (an implementation detail of the storage
+/// adapter). To fetch the actual file the client calls the download endpoint with <see cref="Id"/>.
+/// </summary>
 public sealed class AttachmentItem
 {
     public Guid Id { get; set; }
-    public Guid TaskId { get; set; }
     public string FileName { get; set; } = string.Empty;
     public string ContentType { get; set; } = string.Empty;
     public long SizeInBytes { get; set; }
     public Guid UploadedBy { get; set; }
-    public DateTime CreatedAtUtc { get; set; }
+
+    // Named to match the API's JSON field (uploadedAtUtc). The previous "CreatedAtUtc" silently stayed at
+    // default(DateTime) because the property name never matched the wire contract — a classic quiet
+    // deserialization bug that a dedicated wire model exists precisely to prevent.
+    public DateTime UploadedAtUtc { get; set; }
+}
+
+/// <summary>
+/// The lean write-side acknowledgement returned after a successful upload — mirrors the API's
+/// <c>UploadAttachmentResponse</c>. Carries just enough (id, echoed file name, server-stamped time) for
+/// the UI to render the new row optimistically without a second round-trip to re-list.
+/// </summary>
+public sealed class UploadAttachmentResult
+{
+    public Guid Id { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public DateTime UploadedAtUtc { get; set; }
 }
 
 // ------------------------------- Notifications -------------------------------

@@ -24,9 +24,13 @@ public sealed class TasksApiClient
         return await response.ToResultAsync<CreateTaskResult>();
     }
 
-    public async Task<ApiResult<TaskItem>> GetByIdAsync(Guid projectId, Guid taskId)
+    public async Task<ApiResult<TaskItem>> GetByIdAsync(Guid taskId)
     {
-        var response = await _http.GetAsync($"api/projects/{projectId}/tasks/{taskId}");
+        // Item-level route: once a task exists it has its own stable identity, so it is addressed by its
+        // own id — the client does NOT need the parent project id to fetch it. This mirrors the API's
+        // GET api/tasks/{id}. The previous project-scoped path (api/projects/{id}/tasks/{id}) had no
+        // matching server route and always 404'd; carrying an unused projectId was also dead state.
+        var response = await _http.GetAsync($"api/tasks/{taskId}");
         return await response.ToResultAsync<TaskItem>();
     }
 
@@ -47,26 +51,29 @@ public sealed class TasksApiClient
         return await response.ToResultAsync<PagedResult<TaskItem>>();
     }
 
-    public async Task<ApiResult> AssignAsync(Guid projectId, Guid taskId, Guid assigneeId)
+    public async Task<ApiResult> AssignAsync(Guid taskId, Guid assigneeId)
     {
+        // Named verb sub-resource on the item route (POST api/tasks/{id}/assign): assignment is a discrete
+        // action, not a wholesale replacement of the task, so it is not a PUT and it is keyed only by the
+        // task's own id.
         var response = await _http.PostAsJsonAsync(
-            $"api/projects/{projectId}/tasks/{taskId}/assign",
+            $"api/tasks/{taskId}/assign",
             new AssignTaskRequest(assigneeId));
         return await response.ToResultAsync();
     }
 
-    public async Task<ApiResult> ChangeStatusAsync(Guid projectId, Guid taskId, ProjectTaskStatus newStatus)
+    public async Task<ApiResult> ChangeStatusAsync(Guid taskId, ProjectTaskStatus newStatus)
     {
         var response = await _http.PostAsJsonAsync(
-            $"api/projects/{projectId}/tasks/{taskId}/status",
+            $"api/tasks/{taskId}/status",
             new ChangeTaskStatusRequest(newStatus));
         return await response.ToResultAsync();
     }
 
-    public async Task<ApiResult> UpdatePriorityAsync(Guid projectId, Guid taskId, TaskPriority priority)
+    public async Task<ApiResult> UpdatePriorityAsync(Guid taskId, TaskPriority priority)
     {
         var response = await _http.PostAsJsonAsync(
-            $"api/projects/{projectId}/tasks/{taskId}/priority",
+            $"api/tasks/{taskId}/priority",
             new UpdateTaskPriorityRequest(priority));
         return await response.ToResultAsync();
     }

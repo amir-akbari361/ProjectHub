@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Components.Authorization;
+using ProjectHub.Web.Client.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
 namespace ProjectHub.Web.Client.Auth;
+
 
 /// <summary>
 /// Bridges our Bearer-token world into Blazor's authentication abstraction. Blazor components use
@@ -31,12 +33,31 @@ public sealed class JwtAuthenticationStateProvider : AuthenticationStateProvider
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        var tokens = await _tokenStore.LoadAsync();
+        // WHY THE TRY/CATCH AROUND LoadAsync?
+        // In an Interactive-Server Blazor app this method is invoked twice: once during the initial
+        // *pre-render* (static SSR) when there is no browser yet, and again once the SignalR circuit is
+        // live and JS interop works. TokenStore.LoadAsync reads localStorage via JS, which THROWS
+        // InvalidOperationException during pre-render. If that exception escaped here it would bubble up
+        // through CascadingAuthenticationState and blank the page. Catching it and returning Anonymous
+        // makes pre-render deterministically "not signed in"; the SECOND call (post-interop) then reads
+        // the real token and, because TokenStore didn't cache the failed read, resolves the true identity.
+        LoginResult? tokens;
+        try
+        {
+            tokens = await _tokenStore.LoadAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            // JS interop unavailable (pre-render). Treat as anonymous for now; a re-evaluation happens
+            // after the circuit connects.
+            return Anonymous;
+        }
 
         if (tokens is null || string.IsNullOrWhiteSpace(tokens.AccessToken))
         {
             return Anonymous;
         }
+
 
         // If the access token is already past its expiry there's no point presenting it — treat the
         // user as anonymous so the UI routes to login rather than firing doomed API calls.

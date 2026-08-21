@@ -1,0 +1,141 @@
+@page "/search"
+@attribute [Authorize]
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject SearchApiClient SearchApi
+@inject NavigationManager Nav
+
+<PageTitle>Search · ProjectHub</PageTitle>
+
+@* Global search across projects and tasks. The query runs on Enter or the search button (not on every
+   keystroke) so we don't hammer the API; results are grouped by type and clicking a row navigates to the
+   underlying entity. *@
+
+<div class="ph-page-header">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:800;">Search</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">Find projects and tasks across your workspace</MudText>
+    </div>
+</div>
+
+<MudTextField @bind-Value="_term" Placeholder="Search projects and tasks…"
+              Variant="Variant.Outlined" Adornment="Adornment.Start"
+              AdornmentIcon="@Icons.Material.Filled.Search" Immediate="false"
+              OnKeyUp="OnKeyUp" Class="mb-6" Clearable="true" />
+
+@if (_searching)
+{
+    <MudStack Spacing="2">
+        @for (var i = 0; i < 4; i++)
+        {
+            <MudPaper Class="ph-card pa-4" Elevation="0">
+                <MudSkeleton Width="50%" Height="22px" />
+                <MudSkeleton Width="80%" Height="16px" Class="mt-2" />
+            </MudPaper>
+        }
+    </MudStack>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_hasSearched && _results.Count == 0)
+{
+    <div class="ph-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Style="font-size:4rem;" />
+        <MudText Typo="Typo.h6" Class="mt-3">No results</MudText>
+        <MudText Typo="Typo.body2">Nothing matched "@_lastTerm". Try a different search.</MudText>
+    </div>
+}
+else if (_results.Count > 0)
+{
+    <MudStack Spacing="2">
+        @foreach (var r in _results)
+        {
+            <MudPaper Class="ph-card ph-card-hover pa-4 d-flex align-center" Elevation="0"
+                      @onclick="@(() => NavigateTo(r))">
+                <MudIcon Icon="@IconFor(r.Type)" Color="Color.Primary" Class="mr-3" />
+                <div class="flex-grow-1">
+                    <MudText Typo="Typo.body1" Style="font-weight:600;">@r.Title</MudText>
+                    @if (!string.IsNullOrWhiteSpace(r.Snippet))
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@r.Snippet</MudText>
+                    }
+                </div>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@r.Type</MudChip>
+            </MudPaper>
+        }
+    </MudStack>
+}
+
+@code {
+    private string _term = string.Empty;
+    private string _lastTerm = string.Empty;
+    private bool _searching;
+    private bool _hasSearched;
+    private string? _error;
+    private List<SearchResult> _results = new();
+
+    private async Task OnKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await RunSearchAsync();
+        }
+    }
+
+    private async Task RunSearchAsync()
+    {
+        var term = _term?.Trim() ?? string.Empty;
+
+        // The API requires a minimum term length; short-circuit locally so we don't fire a request we
+        // know will be rejected.
+        if (term.Length < 2)
+        {
+            _error = "Enter at least 2 characters to search.";
+            _results = new();
+            _hasSearched = false;
+            return;
+        }
+
+        _searching = true;
+        _error = null;
+
+        var result = await SearchApi.SearchAsync(term);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Search failed.";
+            _results = new();
+        }
+        else
+        {
+            _results = result.Value;
+        }
+
+        _lastTerm = term;
+        _hasSearched = true;
+        _searching = false;
+    }
+
+    // Routes a result to the correct page based on its type. Tasks need their owning project id, which
+    // the API includes in the result.
+    private void NavigateTo(SearchResult r)
+    {
+        if (string.Equals(r.Type, "Project", StringComparison.OrdinalIgnoreCase))
+        {
+            Nav.NavigateTo($"/projects/{r.Id}");
+        }
+        else if (string.Equals(r.Type, "Task", StringComparison.OrdinalIgnoreCase) && r.ProjectId.HasValue)
+        {
+            Nav.NavigateTo($"/projects/{r.ProjectId}");
+        }
+    }
+
+    private static string IconFor(string type) => type.ToLowerInvariant() switch
+    {
+        "project" => Icons.Material.Filled.Folder,
+        "task" => Icons.Material.Filled.Task,
+        _ => Icons.Material.Filled.Article
+    };
+}

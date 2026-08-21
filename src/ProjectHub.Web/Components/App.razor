@@ -16,15 +16,19 @@
 
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
 </head>
 
 <body>
-    <Routes />
+    <Routes @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <script src="_framework/blazor.web.js"></script>
     <!-- MudBlazor's JS powers ripples, popovers, dialogs, and the snackbar. It must load after
          blazor.web.js so its interop hooks attach to an initialized runtime. -->
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <!-- Our tiny download helper. Loaded last so window.projectHubDownload exists before any component
+         invokes it via JS interop. See wwwroot/js/fileDownload.js for why the bytes are round-tripped
+         through C# instead of exposing a naked API URL to the browser. -->
+    <script src="js/fileDownload.js"></script>
 </body>
 
 </html>

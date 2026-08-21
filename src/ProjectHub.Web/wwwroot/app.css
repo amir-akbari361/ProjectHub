@@ -1,0 +1,349 @@
+/* ---------------------------------------------------------------------------------------------------
+   ProjectHub global styles. MudBlazor owns the component-level look; these rules add the "product"
+   polish on top: brand gradients, a frosted app bar, soft card shadows, and a few utility classes the
+   pages reuse. Everything is scoped with a ph- prefix to avoid clashing with MudBlazor's own classes.
+   --------------------------------------------------------------------------------------------------- */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+html,
+body {
+  font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+}
+
+/* Frosted, translucent app bar that sits above a subtle brand tint. */
+.ph-appbar {
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  background-color: rgba(255, 255, 255, 0.72) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.mud-theme-dark .ph-appbar {
+  background-color: rgba(15, 23, 42, 0.72) !important;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.9);
+}
+
+/* Gradient wordmark for the brand text. */
+.ph-brand {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ph-drawer {
+  border-right: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.mud-theme-dark .ph-drawer {
+  border-right: 1px solid rgba(30, 41, 59, 0.9);
+}
+
+/* Cards get a soft, layered shadow and a hover lift for interactive lists. */
+.ph-card {
+  border-radius: 16px !important;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.ph-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14) !important;
+  cursor: pointer;
+}
+
+/* Stat tiles on the dashboard: a colored gradient wash behind a big number. */
+.ph-stat {
+  border-radius: 16px !important;
+  color: #fff;
+  overflow: hidden;
+  position: relative;
+}
+
+.ph-stat .ph-stat-icon {
+  position: absolute;
+  right: -6px;
+  bottom: -10px;
+  opacity: 0.22;
+  font-size: 6rem;
+}
+
+.ph-grad-indigo {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+}
+.ph-grad-violet {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+}
+.ph-grad-cyan {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+}
+.ph-grad-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+.ph-grad-amber {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+/* Kanban columns and cards. */
+.ph-kanban-column {
+  border-radius: 16px;
+  background-color: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mud-theme-dark .ph-kanban-column {
+  background-color: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(30, 41, 59, 0.9);
+}
+
+.ph-kanban-card {
+  border-radius: 12px !important;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ph-kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16) !important;
+}
+
+/* A thin colored accent bar used on the left of cards to show priority. */
+.ph-accent-bar {
+  width: 4px;
+  border-radius: 4px;
+  align-self: stretch;
+}
+
+/* Nav links: pill-shaped active state that matches the brand. */
+.ph-nav .mud-nav-link {
+  border-radius: 10px;
+  margin: 2px 8px;
+  font-weight: 500;
+}
+
+.ph-nav .mud-nav-link.active {
+  background: linear-gradient(
+    90deg,
+    rgba(99, 102, 241, 0.16),
+    rgba(139, 92, 246, 0.1)
+  );
+  color: var(--mud-palette-primary) !important;
+}
+
+.ph-nav .mud-nav-link.active .mud-icon-root {
+  color: var(--mud-palette-primary) !important;
+}
+
+/* Empty-state block: centered icon + message. */
+.ph-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--mud-palette-text-secondary);
+}
+
+/* Page header spacing helper. */
+.ph-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 1.25rem;
+}
+
+/* Blazor error UI (kept subtle). */
+#blazor-error-ui {
+  background: #1e293b;
+  color: #fff;
+  bottom: 0;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+  display: none;
+  left: 0;
+  padding: 0.75rem 1.25rem;
+  position: fixed;
+  width: 100%;
+  z-index: 1000;
+  border-radius: 0;
+}
+
+#blazor-error-ui .dismiss {
+  cursor: pointer;
+  position: absolute;
+  right: 0.75rem;
+  top: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   AUTH PAGES — Split-screen layout with a gradient hero and a centered form card.
+   --------------------------------------------------------------------------------------------------- */
+
+.ph-auth-shell {
+  display: flex;
+  min-height: 100vh;
+  background: var(--mud-palette-background);
+}
+
+/* Left: brand hero with gradient overlay. Hidden on mobile. */
+.ph-auth-hero {
+  position: relative;
+  flex: 1;
+  display: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  overflow: hidden;
+}
+
+@media (min-width: 960px) {
+  .ph-auth-hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.mud-theme-dark .ph-auth-hero {
+  background: linear-gradient(135deg, #4c1d95 0%, #5b21b6 50%, #7c3aed 100%);
+}
+
+.ph-auth-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at 30% 50%,
+      rgba(255, 255, 255, 0.15) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      circle at 70% 80%,
+      rgba(255, 255, 255, 0.1) 0%,
+      transparent 50%
+    );
+  pointer-events: none;
+}
+
+.ph-auth-hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 480px;
+  padding: 3rem;
+  color: #fff;
+}
+
+.ph-auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 3rem;
+}
+
+.ph-auth-hero-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 1rem;
+  color: #fff;
+}
+
+.ph-auth-hero-sub {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 2.5rem;
+}
+
+.ph-auth-features {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.ph-auth-feature {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.ph-auth-feature .mud-icon-root {
+  font-size: 1.5rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Right: centered form column. Takes full width on mobile. */
+.ph-auth-form-col {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--mud-palette-background);
+}
+
+@media (min-width: 960px) {
+  .ph-auth-form-col {
+    max-width: 540px;
+  }
+}
+
+.ph-auth-form-inner {
+  width: 100%;
+  max-width: 420px;
+}
+
+/* The form card itself. Each auth page renders this. */
+.ph-auth-card {
+  width: 100%;
+  background: var(--mud-palette-surface);
+  border-radius: 20px;
+  padding: 2.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.mud-theme-dark .ph-auth-card {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border-color: rgba(30, 41, 59, 0.6);
+}
+
+.ph-auth-head {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.ph-auth-title {
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.ph-auth-submit {
+  margin-top: 0.5rem;
+  height: 48px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.ph-auth-foot {
+  margin-top: 1.5rem;
+  text-align: center;
+}

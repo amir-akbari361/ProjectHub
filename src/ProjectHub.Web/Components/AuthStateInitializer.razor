@@ -1,0 +1,37 @@
+@using ProjectHub.Web.Client.Auth
+@inject JwtAuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+
+@* WHY THIS COMPONENT EXISTS
+   -------------------------
+   In an InteractiveServer Blazor app with prerender:false, the SignalR circuit establishes AFTER
+   App.razor renders, which means JS interop (localStorage) is briefly unavailable during the FIRST
+   GetAuthenticationStateAsync() call. TokenStore.LoadAsync throws InvalidOperationException and returns
+   Anonymous, causing the router to show <NotAuthorized> even when a valid token exists in localStorage.
+   
+   This component ensures that AFTER the circuit is fully live and JS interop is ready, we re-trigger
+   GetAuthenticationStateAsync() so the auth state provider can successfully read the token from
+   localStorage and update the authentication state. This fixes both "logged out after refresh" and
+   "blank page after login" issues.
+   
+   PLACEMENT: Must be inside Routes.razor so it runs on every navigation and has access to the auth cascade. *@
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        // Wait a moment for the SignalR circuit to fully establish and JS interop to be ready.
+        // This brief delay ensures TokenStore.LoadAsync can successfully read from localStorage.
+        await Task.Delay(100);
+        
+        // Re-notify authentication state. This triggers GetAuthenticationStateAsync() again, and this
+        // time JS interop is available so TokenStore.LoadAsync succeeds, reads the cached token, and
+        // returns the correct authenticated principal. The router then re-evaluates authorization and
+        // shows the correct page instead of redirecting to /login.
+        AuthStateProvider.NotifyAuthenticationStateChanged();
+    }
+}

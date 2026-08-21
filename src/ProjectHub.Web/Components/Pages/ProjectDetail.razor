@@ -1,0 +1,436 @@
+@page "/projects/{ProjectId:guid}"
+@attribute [Authorize]
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@using ApiProjectDetail = ProjectHub.Web.Client.Models.ProjectDetail
+@inject ProjectsApiClient ProjectsApi
+@inject TasksApiClient TasksApi
+@inject MembersApiClient MembersApi
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>@(_project?.Name ?? "Project") · ProjectHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <MudSkeleton Width="40%" Height="42px" Class="mb-2" />
+    <MudSkeleton Width="60%" Height="24px" Class="mb-4" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_project is not null)
+{
+    <div class="ph-page-header">
+        <div>
+            <div class="d-flex align-center gap-3 mb-2">
+                <MudText Typo="Typo.h4" Style="font-weight:800;">@_project.Name</MudText>
+                <MudChip T="string" Size="Size.Medium"
+                         Color="@(_project.Status == ProjectStatus.Active ? Color.Success : Color.Default)"
+                         Variant="Variant.Filled">
+                    @_project.Status
+                </MudChip>
+            </div>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">@_project.Description</MudText>
+        </div>
+        <div class="d-flex gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.Edit"
+                       OnClick="OpenEditDialog">
+                Edit
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                       StartIcon="@Icons.Material.Outlined.Archive"
+                       OnClick="ArchiveAsync"
+                       Disabled="_project.Status == ProjectStatus.Archived">
+                Archive
+            </MudButton>
+        </div>
+    </div>
+
+    <MudTabs Elevation="0" Rounded="true" Color="Color.Primary" Class="mt-4">
+        <MudTabPanel Text="Tasks" Icon="@Icons.Material.Filled.Task">
+            <div class="pa-4">
+                <div class="d-flex justify-end mb-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               OnClick="OpenNewTaskDialog">
+                        New Task
+                    </MudButton>
+                </div>
+
+                @if (_tasks.Count == 0)
+                {
+                    <div class="ph-empty">
+                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Large" Style="font-size:3rem;" />
+                        <MudText Typo="Typo.h6" Class="mt-2">No tasks yet</MudText>
+                        <MudText Typo="Typo.body2">Create tasks to organize your project work.</MudText>
+                    </div>
+                }
+                else
+                {
+                    <MudStack Spacing="2">
+                        @foreach (var task in _tasks)
+                        {
+                            <MudPaper Class="ph-card pa-3" Elevation="0">
+                                <div class="d-flex align-center gap-3">
+                                    <div class="ph-accent-bar" style="background-color: @GetPriorityColor(task.Priority);"></div>
+                                    <div class="flex-grow-1">
+                                        <MudText Typo="Typo.subtitle1" Style="font-weight:600;">@task.Title</MudText>
+                                        <div class="d-flex align-center gap-3 mt-2">
+                                            <MudSelect T="ProjectTaskStatus" Value="task.Status" Dense="true" Variant="Variant.Outlined"
+                                                       Margin="Margin.Dense" Style="min-width:140px;"
+                                                       ValueChanged="@(newStatus => ChangeStatusAsync(task.Id, newStatus))"
+                                                       Disabled="_working">
+                                                @foreach (var status in Enum.GetValues<ProjectTaskStatus>())
+                                                {
+                                                    <MudSelectItem T="ProjectTaskStatus" Value="status">@status</MudSelectItem>
+                                                }
+                                            </MudSelect>
+
+                                            <MudSelect T="TaskPriority" Value="task.Priority" Dense="true" Variant="Variant.Outlined"
+                                                       Margin="Margin.Dense" Style="min-width:120px;"
+                                                       ValueChanged="@(newPriority => ChangePriorityAsync(task.Id, newPriority))"
+                                                       Disabled="_working">
+                                                @foreach (var priority in Enum.GetValues<TaskPriority>())
+                                                {
+                                                    <MudSelectItem T="TaskPriority" Value="priority">@priority</MudSelectItem>
+                                                }
+                                            </MudSelect>
+
+                                            <MudSelect T="Guid?" Value="task.AssigneeId" Dense="true" Variant="Variant.Outlined"
+                                                       Margin="Margin.Dense" Style="min-width:160px;" Placeholder="Unassigned"
+                                                       ValueChanged="@(newAssigneeId => AssignTaskAsync(task.Id, newAssigneeId))"
+                                                       Disabled="_working">
+                                                <MudSelectItem T="Guid?" Value="@((Guid?)null)">Unassigned</MudSelectItem>
+                                                @foreach (var member in _members)
+                                                {
+                                                    <MudSelectItem T="Guid?" Value="member.UserId">@member.FullName</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </div>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Members" Icon="@Icons.Material.Filled.People">
+            <div class="pa-4">
+                @if (_members.Count == 0)
+                {
+                    <div class="ph-empty">
+                        <MudIcon Icon="@Icons.Material.Outlined.GroupAdd" Size="Size.Large" Style="font-size:3rem;" />
+                        <MudText Typo="Typo.h6" Class="mt-2">No members yet</MudText>
+                        <MudText Typo="Typo.body2">Add team members to collaborate.</MudText>
+                    </div>
+                }
+                else
+                {
+                    <MudList T="string" Dense="true">
+                        @foreach (var member in _members)
+                        {
+                            <MudListItem T="string">
+                                <div class="d-flex align-center justify-space-between">
+                                    <div class="d-flex align-center gap-3">
+                                        <MudAvatar Color="Color.Primary" Size="Size.Medium">
+                                            @member.FullName.Substring(0, 1).ToUpper()
+                                        </MudAvatar>
+                                        <div>
+                                            <MudText Typo="Typo.body1">@member.FullName</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@member.Email</MudText>
+                                        </div>
+                                    </div>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
+                                        @member.Role
+                                    </MudChip>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@* Edit dialog mirrors the create pattern: simple form, inline validation, scoped state. *@
+<MudDialog @bind-Visible="_editOpen" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Outlined.Edit" Class="mr-2" />Edit Project</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_editName" Label="Name" Required="true" Variant="Variant.Outlined"
+                      Immediate="true" Class="mb-3" MaxLength="200" Counter="200" />
+        <MudTextField @bind-Value="_editDescription" Label="Description" Variant="Variant.Outlined"
+                      Lines="3" MaxLength="1000" Counter="1000" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _editOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync"
+                   Disabled="_saving || string.IsNullOrWhiteSpace(_editName)">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Save
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* New Task dialog: title + description + priority. Status defaults to ToDo; assignment happens after creation
+   via the inline dropdown. This matches the separation of concerns already established: creation is atomic,
+   mutation happens via dedicated commands. *@
+<MudDialog @bind-Visible="_newTaskOpen" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Outlined.Add" Class="mr-2" />New Task</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_newTaskTitle" Label="Title" Required="true" Variant="Variant.Outlined"
+                      Immediate="true" Class="mb-3" MaxLength="200" Counter="200" />
+        <MudTextField @bind-Value="_newTaskDescription" Label="Description" Variant="Variant.Outlined"
+                      Lines="3" MaxLength="2000" Counter="2000" Class="mb-3" />
+        <MudSelect @bind-Value="_newTaskPriority" Label="Priority" Variant="Variant.Outlined" T="TaskPriority">
+            @foreach (var priority in Enum.GetValues<TaskPriority>())
+            {
+                <MudSelectItem T="TaskPriority" Value="priority">@priority</MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _newTaskOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateTaskAsync"
+                   Disabled="_saving || string.IsNullOrWhiteSpace(_newTaskTitle)">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Create
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private ApiProjectDetail? _project;
+    private List<TaskItem> _tasks = new();
+    private List<MemberItem> _members = new();
+
+    private bool _editOpen;
+    private string _editName = string.Empty;
+    private string? _editDescription;
+
+    private bool _newTaskOpen;
+    private string _newTaskTitle = string.Empty;
+    private string? _newTaskDescription;
+    private TaskPriority _newTaskPriority = TaskPriority.Medium;
+    private bool _working;
+
+    // OnInitializedAsync + OnParametersSetAsync ensures the page reloads if the user navigates from one
+    // project detail to another without leaving the component tree. Without OnParametersSet the page would
+    // show stale data when the route param changes.
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_loading)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var projectResult = await ProjectsApi.GetByIdAsync(ProjectId);
+        if (!projectResult.IsSuccess || projectResult.Value is null)
+        {
+            _error = projectResult.Error ?? "Project not found.";
+            _loading = false;
+            return;
+        }
+
+        _project = projectResult.Value;
+
+        // Load tasks and members in parallel to minimize latency. Both are optional; if either fails we still
+        // show the page but those sections will be empty (or show an inline error if needed later).
+        var taskResult = await TasksApi.ListAsync(ProjectId, pageNumber: 1, pageSize: 50);
+        var memberResult = await MembersApi.ListAsync(ProjectId);
+
+        _tasks = taskResult.IsSuccess && taskResult.Value is not null ? taskResult.Value.Items : new();
+        _members = memberResult.IsSuccess && memberResult.Value is not null ? memberResult.Value : new();
+
+        _loading = false;
+    }
+
+    private void OpenEditDialog()
+    {
+        _editName = _project?.Name ?? string.Empty;
+        _editDescription = _project?.Description;
+        _editOpen = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editName) || _project is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        var result = await ProjectsApi.UpdateAsync(ProjectId, new UpdateProjectRequest(_editName.Trim(), _editDescription));
+        _saving = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to update project.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Project updated.", Severity.Success);
+        _editOpen = false;
+        await LoadAsync();
+    }
+
+    private async Task ArchiveAsync()
+    {
+        if (_project is null)
+        {
+            return;
+        }
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Archive Project",
+            "Are you sure you want to archive this project? This action can be reversed later.",
+            yesText: "Archive", cancelText: "Cancel");
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        var result = await ProjectsApi.ArchiveAsync(ProjectId);
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to archive project.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Project archived.", Severity.Success);
+        Nav.NavigateTo("/projects");
+    }
+
+    private void OpenNewTaskDialog()
+    {
+        _newTaskTitle = string.Empty;
+        _newTaskDescription = null;
+        _newTaskPriority = TaskPriority.Medium;
+        _newTaskOpen = true;
+    }
+
+    private async Task CreateTaskAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newTaskTitle))
+        {
+            return;
+        }
+
+        _saving = true;
+        var result = await TasksApi.CreateAsync(ProjectId, new CreateTaskRequest(
+            _newTaskTitle.Trim(),
+            _newTaskDescription,
+            _newTaskPriority));
+        _saving = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to create task.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Task created.", Severity.Success);
+        _newTaskOpen = false;
+        await LoadAsync();
+    }
+
+    private async Task ChangeStatusAsync(Guid taskId, ProjectTaskStatus newStatus)
+    {
+        _working = true;
+        var result = await TasksApi.ChangeStatusAsync(taskId, newStatus);
+        _working = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to change status.", Severity.Error);
+            await LoadAsync(); // Reload to reset the UI to the actual server state
+            return;
+        }
+
+        Snackbar.Add("Status updated.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task ChangePriorityAsync(Guid taskId, TaskPriority newPriority)
+    {
+        _working = true;
+        var result = await TasksApi.UpdatePriorityAsync(taskId, newPriority);
+        _working = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to change priority.", Severity.Error);
+            await LoadAsync();
+            return;
+        }
+
+        Snackbar.Add("Priority updated.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task AssignTaskAsync(Guid taskId, Guid? assigneeId)
+    {
+        if (!assigneeId.HasValue)
+        {
+            // The API currently has no "unassign" endpoint; the AssignTask command requires a user ID.
+            // For production you'd add an UnassignTask command or allow null. For now we silently skip.
+            return;
+        }
+
+        _working = true;
+        var result = await TasksApi.AssignAsync(taskId, assigneeId.Value);
+        _working = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to assign task.", Severity.Error);
+            await LoadAsync();
+            return;
+        }
+
+        Snackbar.Add("Task assigned.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private static string GetPriorityColor(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Critical => "#EF4444",
+        TaskPriority.High => "#F59E0B",
+        TaskPriority.Medium => "#3B82F6",
+        TaskPriority.Low => "#10B981",
+        _ => "#94A3B8"
+    };
+}

@@ -1,6 +1,38 @@
-﻿<Router AppAssembly="typeof(Program).Assembly">
-    <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
-    </Found>
-</Router>
+﻿@* WHY CascadingAuthenticationState WRAPS THE ROUTER
+   -------------------------------------------------
+   <AuthorizeRouteView> and every <AuthorizeView>/[Authorize] in the app read the current user from an
+   AuthenticationState that must be *cascaded* down the component tree. CascadingAuthenticationState is the
+   provider that subscribes to our JwtAuthenticationStateProvider and pushes the ClaimsPrincipal down as a
+   cascading value. Without it, authorization components have no state to read and treat everyone as
+   anonymous — or throw. It belongs here at the very root so it covers all routed pages.
+
+   WHY <NotAuthorized> RENDERS A COMPONENT INSTEAD OF NAVIGATING INLINE
+   The previous version called Navigation.NavigateTo(...) directly inside this markup. That executes during
+   the render pass, which Blazor interprets as a framework auth challenge and then demands IAuthenticationService
+   (part of the server cookie-auth stack we don't register), throwing at runtime. Delegating to
+   <RedirectToLogin>, which navigates in OnAfterRender, moves the redirect *out* of the render pass and fixes it.
+   
+   WHY AuthStateInitializer IS INSIDE THE CASCADE
+   In InteractiveServer mode with prerender:false, the SignalR circuit establishes AFTER the initial render,
+   so JS interop (localStorage) isn't ready when GetAuthenticationStateAsync first runs. AuthStateInitializer
+   waits for the circuit to be fully live, then re-triggers authentication state evaluation so the token can
+   be successfully read from localStorage. This fixes "logged out after refresh" and "blank page after login". *@
+<CascadingAuthenticationState>
+    <AuthStateInitializer />
+    <Router AppAssembly="typeof(Program).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+                <NotAuthorized>
+                    @* Shown briefly while RedirectToLogin bounces an unauthenticated visitor to /login. *@
+                    <RedirectToLogin />
+                </NotAuthorized>
+                <Authorizing>
+                    @* Rendered while the auth state is still resolving (e.g., decoding the JWT), so the
+                       user sees a spinner rather than a flash of "not authorized" content. *@
+                    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Class="ma-8" />
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+    </Router>
+</CascadingAuthenticationState>

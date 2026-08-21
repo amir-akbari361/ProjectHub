@@ -1,0 +1,207 @@
+@page "/projects"
+@attribute [Authorize]
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject ProjectsApiClient ProjectsApi
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Projects · ProjectHub</PageTitle>
+
+@* Projects list with server-side search + a create dialog. The list reloads whenever the search term
+   changes (debounced by MudTextField's OnDebounceIntervalElapsed) so we don't hammer the API on every
+   keystroke. *@
+
+<div class="ph-page-header">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:800;">Projects</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">Browse and manage your projects</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">
+        New Project
+    </MudButton>
+</div>
+
+<MudTextField T="string" @bind-Value="_searchTerm" Immediate="true"
+              Placeholder="Search projects…"
+              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4"
+              DebounceInterval="400" OnDebounceIntervalElapsed="OnSearchChanged" />
+
+@if (_loading)
+{
+    <MudGrid>
+        @for (var i = 0; i < 6; i++)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="ph-card pa-4" Elevation="0">
+                    <MudSkeleton Width="60%" Height="28px" />
+                    <MudSkeleton Width="100%" Height="18px" Class="mt-2" />
+                    <MudSkeleton Width="40%" Height="18px" Class="mt-2" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_projects.Count == 0)
+{
+    <div class="ph-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.FolderOff" Size="Size.Large" Style="font-size:4rem;" />
+        <MudText Typo="Typo.h6" Class="mt-3">No projects found</MudText>
+        <MudText Typo="Typo.body2">Try a different search, or create a new project.</MudText>
+    </div>
+}
+else
+{
+    <MudGrid>
+        @foreach (var project in _projects)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="ph-card ph-card-hover pa-4" Elevation="0"
+                          @onclick="@(() => Nav.NavigateTo($"/projects/{project.Id}"))">
+                    <div class="d-flex align-center justify-space-between mb-2">
+                        <MudText Typo="Typo.h6" Style="font-weight:700;">@project.Name</MudText>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(project.Status == ProjectStatus.Active ? Color.Success : Color.Default)"
+                                 Variant="Variant.Filled">
+                            @project.Status
+                        </MudChip>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3" Style="min-height:40px;">
+                        @(string.IsNullOrWhiteSpace(project.Description) ? "No description" : project.Description)
+                    </MudText>
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Outlined.Group" Size="Size.Small" Class="mr-1" />
+                        <MudText Typo="Typo.caption">@project.MemberCount members</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @if (_totalPages > 1)
+    {
+        <div class="d-flex justify-center mt-6">
+            <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_pageNumber"
+                           SelectedChanged="OnPageChanged" />
+        </div>
+    }
+}
+
+@* Create dialog. MudDialog is bound to _createOpen; the form uses a simple model + validation-on-submit. *@
+<MudDialog @bind-Visible="_createOpen" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Filled.CreateNewFolder" Class="mr-2" />Create Project</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_newName" Label="Name" Required="true" Variant="Variant.Outlined"
+                      Immediate="true" Class="mb-3" MaxLength="200" Counter="200" />
+        <MudTextField @bind-Value="_newDescription" Label="Description" Variant="Variant.Outlined"
+                      Lines="3" MaxLength="1000" Counter="1000" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _createOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync"
+                   Disabled="_creating || string.IsNullOrWhiteSpace(_newName)">
+            @if (_creating)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Create
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private bool _loading = true;
+    private bool _creating;
+    private string? _error;
+    private List<ProjectListItem> _projects = new();
+
+    private string? _searchTerm;
+    private int _pageNumber = 1;
+    private const int PageSize = 12;
+    private int _totalPages;
+
+    private bool _createOpen;
+    private string _newName = string.Empty;
+    private string? _newDescription;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    // Central load routine used by initial render, search, and paging. Keeping it in one place means the
+    // loading/error handling logic is never duplicated (DRY).
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await ProjectsApi.ListAsync(
+            pageNumber: _pageNumber,
+            pageSize: PageSize,
+            searchTerm: _searchTerm,
+            sortBy: "createdAt",
+            sortDescending: true);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Failed to load projects.";
+        }
+        else
+        {
+            _projects = result.Value.Items;
+            _totalPages = result.Value.TotalPages;
+        }
+
+        _loading = false;
+    }
+
+    private async Task OnSearchChanged(string term)
+    {
+        _searchTerm = term;
+        _pageNumber = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _pageNumber = page;
+        await LoadAsync();
+    }
+
+    private void OpenCreateDialog()
+    {
+        _newName = string.Empty;
+        _newDescription = null;
+        _createOpen = true;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newName))
+        {
+            return;
+        }
+
+        _creating = true;
+        var result = await ProjectsApi.CreateAsync(new CreateProjectRequest(_newName.Trim(), _newDescription));
+        _creating = false;
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            Snackbar.Add(result.Error ?? "Failed to create project.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Project created.", Severity.Success);
+        _createOpen = false;
+        Nav.NavigateTo($"/projects/{result.Value.Id}");
+    }
+}

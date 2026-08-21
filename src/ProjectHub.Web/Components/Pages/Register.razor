@@ -1,0 +1,166 @@
+@page "/register"
+@using System.ComponentModel.DataAnnotations
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject AuthApiClient AuthApi
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@layout AuthLayout
+
+<PageTitle>Create account · ProjectHub</PageTitle>
+
+<div class="ph-auth-card">
+    <div class="ph-auth-head">
+        <MudIcon Icon="@Icons.Material.Filled.Hub" Color="Color.Primary" Style="font-size:2.5rem;" />
+        <MudText Typo="Typo.h4" Class="ph-auth-title">Create your account</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">Join ProjectHub and start collaborating</MudText>
+    </div>
+
+    <EditForm Model="_model" OnValidSubmit="SubmitAsync">
+        <DataAnnotationsValidator />
+
+        <div class="d-flex gap-3 mb-3">
+            <MudTextField @bind-Value="_model.FirstName"
+                          For="@(() => _model.FirstName)"
+                          Label="First name"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          Style="flex:1;" />
+
+            <MudTextField @bind-Value="_model.LastName"
+                          For="@(() => _model.LastName)"
+                          Label="Last name"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          Style="flex:1;" />
+        </div>
+
+        <MudTextField @bind-Value="_model.Email"
+                      For="@(() => _model.Email)"
+                      Label="Email"
+                      Variant="Variant.Outlined"
+                      InputType="InputType.Email"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Outlined.Email"
+                      Immediate="true"
+                      Class="mb-3" />
+
+        <MudTextField @bind-Value="_model.Password"
+                      For="@(() => _model.Password)"
+                      Label="Password"
+                      Variant="Variant.Outlined"
+                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                      Adornment="Adornment.End"
+                      AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                      OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                      Immediate="true"
+                      Class="mb-3"
+                      HelperText="At least 8 characters with uppercase, lowercase, and digit" />
+
+        <MudTextField @bind-Value="_model.ConfirmPassword"
+                      For="@(() => _model.ConfirmPassword)"
+                      Label="Confirm password"
+                      Variant="Variant.Outlined"
+                      InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                      Immediate="true"
+                      Class="mb-3" />
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true" Class="mb-3 rounded-lg">
+                @_error
+            </MudAlert>
+        }
+
+        @if (_success)
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true" Class="mb-3 rounded-lg">
+                Account created! Redirecting to sign in…
+            </MudAlert>
+        }
+
+        <MudButton ButtonType="ButtonType.Submit"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
+                   Size="Size.Large"
+                   Disabled="_busy"
+                   Class="ph-auth-submit">
+            @if (_busy)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                <span>Creating account…</span>
+            }
+            else
+            {
+                <span>Create account</span>
+            }
+        </MudButton>
+    </EditForm>
+
+    <div class="ph-auth-foot">
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Already have an account?
+            <MudLink Href="/login" Typo="Typo.body2" Class="ml-1">Sign in</MudLink>
+        </MudText>
+    </div>
+</div>
+
+@code {
+    private sealed class RegisterModel
+    {
+        [Required(ErrorMessage = "First name is required")]
+        [StringLength(50, ErrorMessage = "First name cannot exceed 50 characters")]
+        public string FirstName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Last name is required")]
+        [StringLength(50, ErrorMessage = "Last name cannot exceed 50 characters")]
+        public string LastName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Enter a valid email address")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required")]
+        [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters")]
+        [RegularExpression(
+            @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$",
+            ErrorMessage = "Password must contain an uppercase letter, a lowercase letter, and a digit")]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Please confirm your password")]
+        [Compare(nameof(Password), ErrorMessage = "Passwords do not match")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    private readonly RegisterModel _model = new();
+    private bool _busy;
+    private bool _showPassword;
+    private string? _error;
+    private bool _success;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        var result = await AuthApi.RegisterAsync(new RegisterRequest(
+            _model.Email.Trim(),
+            _model.FirstName.Trim(),
+            _model.LastName.Trim(),
+            _model.Password));
+
+        _busy = false;
+
+        if (!result.IsSuccess)
+        {
+            _error = result.Error ?? "Unable to create account. Please try again.";
+            return;
+        }
+
+        _success = true;
+        Snackbar.Add("Account created successfully!", Severity.Success);
+        await Task.Delay(1500);
+        Nav.NavigateTo("/login");
+    }
+}

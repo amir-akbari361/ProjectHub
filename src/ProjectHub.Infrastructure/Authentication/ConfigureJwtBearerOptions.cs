@@ -61,7 +61,7 @@ internal sealed class ConfigureJwtBearerOptions : IConfigureNamedOptions<JwtBear
         // which is all the verifier needs. In a microservices topology only the public key would be
         // shipped here (via a .pub PEM or JWKS endpoint); in this single-process app it is simpler —
         // and still secure — to reuse the same PEM for both signing and verification.
-        using var rsa = RSA.Create();
+        var rsa = RSA.Create();
         rsa.ImportFromPem(_jwtOptions.PrivateKeyPem!);
 
         options.TokenValidationParameters = new TokenValidationParameters

@@ -1,0 +1,180 @@
+@page "/notifications"
+@attribute [Authorize]
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject NotificationsApiClient NotificationsApi
+@inject ISnackbar Snackbar
+
+<PageTitle>Notifications · ProjectHub</PageTitle>
+
+@* The notifications page lists the current user's notifications newest-first. A filter toggles between
+   "all" and "unread only" (which re-queries the API rather than filtering client-side, so paging stays
+   correct). Individual rows can be marked read, and a single action marks everything read. *@
+
+<div class="ph-page-header">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:800;">Notifications</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">Stay on top of what's happening</MudText>
+    </div>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.DoneAll"
+               OnClick="MarkAllAsync"
+               Disabled="_working || _items.Count == 0">
+        Mark all read
+    </MudButton>
+</div>
+
+<MudToggleGroup T="bool" Value="_unreadOnly" Color="Color.Primary" Class="mb-4"
+                SelectionMode="SelectionMode.SingleSelection" CheckMark="false"
+                ValueChanged="OnFilterChanged">
+    <MudToggleItem Value="false">All</MudToggleItem>
+    <MudToggleItem Value="true">Unread</MudToggleItem>
+</MudToggleGroup>
+
+@if (_loading)
+{
+    <MudStack Spacing="2">
+        @for (var i = 0; i < 5; i++)
+        {
+            <MudPaper Class="ph-card pa-4" Elevation="0">
+                <MudSkeleton Width="70%" Height="22px" />
+                <MudSkeleton Width="30%" Height="16px" Class="mt-2" />
+            </MudPaper>
+        }
+    </MudStack>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_items.Count == 0)
+{
+    <div class="ph-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.NotificationsNone" Size="Size.Large" Style="font-size:4rem;" />
+        <MudText Typo="Typo.h6" Class="mt-3">You're all caught up</MudText>
+        <MudText Typo="Typo.body2">No @(_unreadOnly ? "unread " : "")notifications right now.</MudText>
+    </div>
+}
+else
+{
+    <MudStack Spacing="2">
+        @foreach (var n in _items)
+        {
+            <MudPaper Class="ph-card pa-4 d-flex align-center" Elevation="0"
+                      Style="@(n.IsRead ? "opacity:.7;" : "")">
+                <MudIcon Icon="@IconFor(n.Type)"
+                         Color="@(n.IsRead ? Color.Default : Color.Primary)" Class="mr-3" />
+                <div class="flex-grow-1">
+                    <MudText Typo="Typo.body1" Style="@(n.IsRead ? "" : "font-weight:600;")">@n.Message</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@n.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
+                </div>
+                @if (!n.IsRead)
+                {
+                    <MudTooltip Text="Mark as read">
+                        <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small"
+                                       Color="Color.Primary" Disabled="_working"
+                                       OnClick="@(() => MarkOneAsync(n))" />
+                    </MudTooltip>
+                }
+            </MudPaper>
+        }
+    </MudStack>
+
+    @if (_totalPages > 1)
+    {
+        <div class="d-flex justify-center mt-6">
+            <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_pageNumber"
+                           SelectedChanged="OnPageChanged" />
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private bool _working;
+    private string? _error;
+    private List<NotificationItem> _items = new();
+
+    private bool _unreadOnly;
+    private int _pageNumber = 1;
+    private const int PageSize = 20;
+    private int _totalPages;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    // Single load routine shared by initial render, filtering, and paging so the loading/error handling
+    // never diverges (DRY).
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await NotificationsApi.ListAsync(_pageNumber, PageSize, _unreadOnly);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Failed to load notifications.";
+        }
+        else
+        {
+            _items = result.Value.Items;
+            _totalPages = result.Value.TotalPages;
+        }
+
+        _loading = false;
+    }
+
+    private async Task OnFilterChanged(bool unreadOnly)
+    {
+        _unreadOnly = unreadOnly;
+        _pageNumber = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnPageChanged(int page)
+    {
+        _pageNumber = page;
+        await LoadAsync();
+    }
+
+    private async Task MarkOneAsync(NotificationItem n)
+    {
+        _working = true;
+        var result = await NotificationsApi.MarkAsReadAsync(n.Id);
+        _working = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to mark as read.", Severity.Error);
+            return;
+        }
+
+        // Reload so the unread filter and any server-side ordering stay authoritative.
+        await LoadAsync();
+    }
+
+    private async Task MarkAllAsync()
+    {
+        _working = true;
+        var result = await NotificationsApi.MarkAllAsReadAsync();
+        _working = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to mark all as read.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("All notifications marked as read.", Severity.Success);
+        await LoadAsync();
+    }
+
+    // Maps a notification type to a representative icon. Kept as a pure switch so the markup stays clean.
+    private static string IconFor(ProjectHub.Domain.Enums.NotificationType type) => type switch
+    {
+        ProjectHub.Domain.Enums.NotificationType.TaskAssigned => Icons.Material.Filled.AssignmentInd,
+        ProjectHub.Domain.Enums.NotificationType.CommentAdded => Icons.Material.Filled.Comment,
+        ProjectHub.Domain.Enums.NotificationType.ProjectInvitation => Icons.Material.Filled.GroupAdd,
+        _ => Icons.Material.Filled.Notifications
+    };
+}

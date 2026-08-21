@@ -73,10 +73,18 @@ internal sealed class JwtProvider : IJwtProvider
         using var rsa = RSA.Create();
         rsa.ImportFromPem(_options.PrivateKeyPem);
 
+        var securityKey = new RsaSecurityKey(rsa)
+        {
+            CryptoProviderFactory = new CryptoProviderFactory
+            {
+                CacheSignatureProviders = false 
+            }
+        };
+
         // Wrap the key in signing credentials using RSA-SHA256. RsaSecurityKey adapts the RSA instance
         // to the token library's key abstraction; SecurityAlgorithms.RsaSha256 selects RS256.
         var signingCredentials = new SigningCredentials(
-            new RsaSecurityKey(rsa),
+            securityKey,
             SecurityAlgorithms.RsaSha256);
 
         // Assemble the token descriptor: issuer/audience (validated on the API side), the claims

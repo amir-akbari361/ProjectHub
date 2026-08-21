@@ -1,0 +1,168 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "E:\\C#\\MyProject\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{C9AF6BF0-0FDA-4422-9838-2534B159C87D}|src\\ProjectHub.Infrastructure\\ProjectHub.Infrastructure.csproj|e:\\c#\\myproject\\src\\projecthub.infrastructure\\authentication\\jwtprovider.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{C9AF6BF0-0FDA-4422-9838-2534B159C87D}|src\\ProjectHub.Infrastructure\\ProjectHub.Infrastructure.csproj|solutionrelative:src\\projecthub.infrastructure\\authentication\\jwtprovider.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{C9AF6BF0-0FDA-4422-9838-2534B159C87D}|src\\ProjectHub.Infrastructure\\ProjectHub.Infrastructure.csproj|e:\\c#\\myproject\\src\\projecthub.infrastructure\\authentication\\configurejwtbeareroptions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{C9AF6BF0-0FDA-4422-9838-2534B159C87D}|src\\ProjectHub.Infrastructure\\ProjectHub.Infrastructure.csproj|solutionrelative:src\\projecthub.infrastructure\\authentication\\configurejwtbeareroptions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AAEA52E6-4BB5-4582-8B0E-527FFF4203AE}|src\\ProjectHub.Web\\ProjectHub.Web.csproj|e:\\c#\\myproject\\src\\projecthub.web\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AAEA52E6-4BB5-4582-8B0E-527FFF4203AE}|src\\ProjectHub.Web\\ProjectHub.Web.csproj|solutionrelative:src\\projecthub.web\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AAEA52E6-4BB5-4582-8B0E-527FFF4203AE}|src\\ProjectHub.Web\\ProjectHub.Web.csproj|e:\\c#\\myproject\\src\\projecthub.web\\client\\http\\bearertokenhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AAEA52E6-4BB5-4582-8B0E-527FFF4203AE}|src\\ProjectHub.Web\\ProjectHub.Web.csproj|solutionrelative:src\\projecthub.web\\client\\http\\bearertokenhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|e:\\c#\\myproject\\src\\projecthub.persistence\\migrations\\applicationdbcontextmodelsnapshot.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|solutionrelative:src\\projecthub.persistence\\migrations\\applicationdbcontextmodelsnapshot.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|e:\\c#\\myproject\\src\\projecthub.persistence\\migrations\\20260728212911_initialcreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|solutionrelative:src\\projecthub.persistence\\migrations\\20260728212911_initialcreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|e:\\c#\\myproject\\src\\projecthub.persistence\\unitofwork.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|solutionrelative:src\\projecthub.persistence\\unitofwork.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|e:\\c#\\myproject\\src\\projecthub.persistence\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|solutionrelative:src\\projecthub.persistence\\class1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|e:\\c#\\myproject\\src\\projecthub.persistence\\dependencyinjection.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E0270CF4-9D4F-4630-ABC8-9CE6203CC37A}|src\\ProjectHub.Persistence\\ProjectHub.Persistence.csproj|solutionrelative:src\\projecthub.persistence\\dependencyinjection.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "JwtProvider.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\Authentication\\JwtProvider.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Infrastructure\\Authentication\\JwtProvider.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\Authentication\\JwtProvider.cs",
+              "RelativeToolTip": "src\\ProjectHub.Infrastructure\\Authentication\\JwtProvider.cs",
+              "ViewState": "AgIAAF8AAAAAAAAAAAAQwGcAAAA0AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-07T13:00:35.538Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ConfigureJwtBearerOptions.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\Authentication\\ConfigureJwtBearerOptions.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Infrastructure\\Authentication\\ConfigureJwtBearerOptions.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Infrastructure\\Authentication\\ConfigureJwtBearerOptions.cs",
+              "RelativeToolTip": "src\\ProjectHub.Infrastructure\\Authentication\\ConfigureJwtBearerOptions.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAEAAAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-07T12:53:13.571Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "BearerTokenHandler.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Web\\Client\\Http\\BearerTokenHandler.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Web\\Client\\Http\\BearerTokenHandler.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Web\\Client\\Http\\BearerTokenHandler.cs",
+              "RelativeToolTip": "src\\ProjectHub.Web\\Client\\Http\\BearerTokenHandler.cs",
+              "ViewState": "AgIAADkAAAAAAAAAAAAiwEkAAAA5AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-07T12:38:47.191Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "Program.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Web\\Program.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Web\\Program.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Web\\Program.cs",
+              "RelativeToolTip": "src\\ProjectHub.Web\\Program.cs",
+              "ViewState": "AgIAACoAAAAAAAAAAAAMwDkAAAAkAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-07T12:38:32.743Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "ApplicationDbContextModelSnapshot.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\Migrations\\ApplicationDbContextModelSnapshot.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Persistence\\Migrations\\ApplicationDbContextModelSnapshot.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\Migrations\\ApplicationDbContextModelSnapshot.cs",
+              "RelativeToolTip": "src\\ProjectHub.Persistence\\Migrations\\ApplicationDbContextModelSnapshot.cs",
+              "ViewState": "AgIAAAQAAAAAAAAAAAAUwAYAAAAdAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-06T14:42:49.34Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "20260728212911_InitialCreate.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\Migrations\\20260728212911_InitialCreate.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Persistence\\Migrations\\20260728212911_InitialCreate.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\Migrations\\20260728212911_InitialCreate.cs",
+              "RelativeToolTip": "src\\ProjectHub.Persistence\\Migrations\\20260728212911_InitialCreate.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-06T14:42:38.741Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "UnitOfWork.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\UnitOfWork.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Persistence\\UnitOfWork.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\UnitOfWork.cs",
+              "RelativeToolTip": "src\\ProjectHub.Persistence\\UnitOfWork.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-06T14:42:34.058Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "Class1.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\Class1.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Persistence\\Class1.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\Class1.cs",
+              "RelativeToolTip": "src\\ProjectHub.Persistence\\Class1.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-06T14:42:30.628Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "DependencyInjection.cs",
+              "DocumentMoniker": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\DependencyInjection.cs",
+              "RelativeDocumentMoniker": "src\\ProjectHub.Persistence\\DependencyInjection.cs",
+              "ToolTip": "E:\\C#\\MyProject\\src\\ProjectHub.Persistence\\DependencyInjection.cs",
+              "RelativeToolTip": "src\\ProjectHub.Persistence\\DependencyInjection.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-06T14:42:29.375Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

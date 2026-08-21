@@ -1,12 +1,22 @@
-﻿@* MudNavMenu renders MudBlazor's Material-styled navigation list inside the drawer. Each
-   MudNavLink integrates with Blazor's Router: it auto-applies an "active" style when the current
-   URL matches Href, and Match="All" (used for the root) prevents "/" from staying highlighted on
-   every page. Icons come from the built-in Material icon set. *@
-<MudNavMenu>
-    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+﻿@* A modern navigation menu with pill-shaped active states and semantic icons. The ph-nav class applies
+   subtle brand gradients to active links so they feel part of the same visual family as the app bar. *@
+
+<MudNavMenu Class="ph-nav mt-4">
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Primary">
         Dashboard
     </MudNavLink>
-    <MudNavLink Href="projects" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Folder">
+
+    <MudNavLink Href="/projects" Icon="@Icons.Material.Filled.Folder" IconColor="Color.Primary">
         Projects
+    </MudNavLink>
+
+    <MudDivider Class="my-3 mx-4" />
+
+    <MudNavLink Href="/notifications" Icon="@Icons.Material.Outlined.Notifications" IconColor="Color.Tertiary">
+        Notifications
+    </MudNavLink>
+
+    <MudNavLink Href="/search" Icon="@Icons.Material.Outlined.Search" IconColor="Color.Tertiary">
+        Search
     </MudNavLink>
 </MudNavMenu>

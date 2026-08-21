@@ -1,0 +1,103 @@
+@inherits LayoutComponentBase
+
+@* A dedicated, chrome-free layout for the authentication pages. It deliberately does NOT include the
+   app bar, drawer, or nav — an unauthenticated visitor has nowhere to navigate yet. We still mount the
+   Mud*Provider trio here because auth pages use snackbars/dialogs and need the theme applied. Keeping a
+   separate layout (rather than reusing MainLayout) is the clean-architecture-for-UI move: each layout has
+   a single responsibility, and neither leaks concerns into the other. *@
+<MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider CloseButton="true" MaxWidth="MaxWidth.Small" FullWidth="true" BackdropClick="false" />
+<MudSnackbarProvider />
+
+<div class="ph-auth-shell">
+    @* Left: brand/marketing hero. Hidden on small screens (CSS) so the form takes the full width on mobile. *@
+    <div class="ph-auth-hero">
+        <div class="ph-auth-hero-content">
+            <div class="ph-auth-brand">
+                <MudIcon Icon="@Icons.Material.Filled.Hub" Style="font-size:2rem;color:#fff;" />
+                <span>ProjectHub</span>
+            </div>
+
+            <MudText Typo="Typo.h3" Class="ph-auth-hero-title">
+                Ship work, together.
+            </MudText>
+            <MudText Typo="Typo.h6" Class="ph-auth-hero-sub">
+                Plan projects, track tasks, and keep your whole team in sync — all in one place.
+            </MudText>
+
+            <div class="ph-auth-features">
+                <div class="ph-auth-feature">
+                    <MudIcon Icon="@Icons.Material.Filled.ViewKanban" />
+                    <span>Kanban boards &amp; sprints</span>
+                </div>
+                <div class="ph-auth-feature">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups" />
+                    <span>Real-time collaboration</span>
+                </div>
+                <div class="ph-auth-feature">
+                    <MudIcon Icon="@Icons.Material.Filled.Notifications" />
+                    <span>Instant notifications</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Right: the centered form column. Each auth page renders its own card into @Body. *@
+    <div class="ph-auth-form-col">
+        <div class="ph-auth-form-inner">
+            @Body
+        </div>
+    </div>
+</div>
+
+@code {
+    private MudThemeProvider _themeProvider = null!;
+    private bool _isDarkMode = true;
+
+    // Reuse the same brand palette as MainLayout so the app feels consistent from the very first screen.
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#6366F1",
+            Secondary = "#8B5CF6",
+            Tertiary = "#06B6D4",
+            Background = "#F7F8FC",
+            Surface = "#FFFFFF",
+            Success = "#10B981",
+            Warning = "#F59E0B",
+            Error = "#EF4444",
+            Info = "#3B82F6",
+            TextPrimary = "#1E293B",
+            TextSecondary = "#64748B"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#818CF8",
+            Secondary = "#A78BFA",
+            Tertiary = "#22D3EE",
+            Background = "#0B1120",
+            Surface = "#161E2E",
+            Success = "#34D399",
+            Warning = "#FBBF24",
+            Error = "#F87171",
+            Info = "#60A5FA",
+            TextPrimary = "#E2E8F0",
+            TextSecondary = "#94A3B8"
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "12px"
+        }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isDarkMode = await _themeProvider.GetSystemPreference();
+            StateHasChanged();
+        }
+    }
+}

@@ -1,7 +1,154 @@
 ﻿@page "/"
+@attribute [Authorize]
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject ProjectsApiClient ProjectsApi
+@inject NavigationManager Nav
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Dashboard · ProjectHub</PageTitle>
 
-<h1>Hello, world!</h1>
+@* The dashboard is the landing surface. It loads a lightweight page of projects and derives simple
+   stats from them. Everything is wrapped in loading/empty states so the page never renders half-baked. *@
 
-Welcome to your new app.
+<div class="ph-page-header">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:800;">Dashboard</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">Your projects at a glance</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => Nav.NavigateTo("/projects"))">
+        New Project
+    </MudButton>
+</div>
+
+@* Stat tiles. MudGrid gives a responsive 12-column layout; each tile takes 3 columns on desktop and
+   the full width on mobile (xs=12). *@
+<MudGrid Class="mb-6">
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="ph-stat ph-grad-indigo pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Style="opacity:.85;">Total Projects</MudText>
+            <MudText Typo="Typo.h3" Style="font-weight:800;">@_totalProjects</MudText>
+            <MudIcon Icon="@Icons.Material.Filled.Folder" Class="ph-stat-icon" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="ph-stat ph-grad-emerald pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Style="opacity:.85;">Active</MudText>
+            <MudText Typo="Typo.h3" Style="font-weight:800;">@_activeProjects</MudText>
+            <MudIcon Icon="@Icons.Material.Filled.RocketLaunch" Class="ph-stat-icon" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="ph-stat ph-grad-amber pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Style="opacity:.85;">Archived</MudText>
+            <MudText Typo="Typo.h3" Style="font-weight:800;">@_archivedProjects</MudText>
+            <MudIcon Icon="@Icons.Material.Filled.Inventory2" Class="ph-stat-icon" />
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" md="3">
+        <MudPaper Class="ph-stat ph-grad-violet pa-4" Elevation="0">
+            <MudText Typo="Typo.subtitle2" Style="opacity:.85;">Members</MudText>
+            <MudText Typo="Typo.h3" Style="font-weight:800;">@_totalMembers</MudText>
+            <MudIcon Icon="@Icons.Material.Filled.Groups" Class="ph-stat-icon" />
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudText Typo="Typo.h6" Class="mb-3" Style="font-weight:700;">Recent Projects</MudText>
+
+@if (_loading)
+{
+    @* Skeleton loaders mimic the card layout while data arrives, avoiding layout shift. *@
+    <MudGrid>
+        @for (var i = 0; i < 3; i++)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="ph-card pa-4" Elevation="0">
+                    <MudSkeleton Width="60%" Height="28px" />
+                    <MudSkeleton Width="100%" Height="18px" Class="mt-2" />
+                    <MudSkeleton Width="40%" Height="18px" Class="mt-2" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_projects.Count == 0)
+{
+    <div class="ph-empty">
+        <MudIcon Icon="@Icons.Material.Outlined.FolderOff" Size="Size.Large" Style="font-size:4rem;" />
+        <MudText Typo="Typo.h6" Class="mt-3">No projects yet</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4">Create your first project to get started.</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Nav.NavigateTo("/projects"))">
+            New Project
+        </MudButton>
+    </div>
+}
+else
+{
+    <MudGrid>
+        @foreach (var project in _projects)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Class="ph-card ph-card-hover pa-4" Elevation="0"
+                          @onclick="@(() => Nav.NavigateTo($"/projects/{project.Id}"))">
+                    <div class="d-flex align-center justify-space-between mb-2">
+                        <MudText Typo="Typo.h6" Style="font-weight:700;">@project.Name</MudText>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(project.Status == ProjectHub.Domain.Enums.ProjectStatus.Active ? Color.Success : Color.Default)"
+                                 Variant="Variant.Filled">
+                            @project.Status
+                        </MudChip>
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3"
+                             Style="min-height:40px;">
+                        @(string.IsNullOrWhiteSpace(project.Description) ? "No description" : project.Description)
+                    </MudText>
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Outlined.Group" Size="Size.Small" Class="mr-1" />
+                        <MudText Typo="Typo.caption">@project.MemberCount members</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<ProjectListItem> _projects = new();
+
+    private int _totalProjects;
+    private int _activeProjects;
+    private int _archivedProjects;
+    private int _totalMembers;
+
+    // OnInitializedAsync runs once when the component is first created. We fetch a page of projects and
+    // compute the summary stats. Any failure is surfaced through _error rather than thrown, so the page
+    // degrades gracefully instead of showing the error boundary.
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await ProjectsApi.ListAsync(pageNumber: 1, pageSize: 12, sortBy: "createdAt", sortDescending: true);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Failed to load projects.";
+            _loading = false;
+            return;
+        }
+
+        _projects = result.Value.Items;
+        _totalProjects = result.Value.TotalCount;
+        _activeProjects = _projects.Count(p => p.Status == ProjectHub.Domain.Enums.ProjectStatus.Active);
+        _archivedProjects = _projects.Count(p => p.Status == ProjectHub.Domain.Enums.ProjectStatus.Archived);
+        _totalMembers = _projects.Sum(p => p.MemberCount);
+        _loading = false;
+    }
+}
