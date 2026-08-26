@@ -1,0 +1,26 @@
+@*
+    CARD GRID SKELETON — the placeholder shown while a grid of cards loads.
+
+    Its shape deliberately MATCHES the real card (same paddings, same three text rows) so the content that
+    replaces it lands in the same place. That is the whole point of a skeleton over a spinner: no layout
+    shift, and the user's eye is already where the data will appear.
+*@
+
+<MudGrid>
+    @for (var i = 0; i < Count; i++)
+    {
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Class="ph-card pa-4" Elevation="0">
+                <MudSkeleton Width="60%" Height="28px" />
+                <MudSkeleton Width="100%" Height="18px" Class="mt-2" />
+                <MudSkeleton Width="40%" Height="18px" Class="mt-2" />
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    /// <summary>How many placeholder cards to draw. Match the page size the caller is about to request.</summary>
+    [Parameter]
+    public int Count { get; set; } = 6;
+}

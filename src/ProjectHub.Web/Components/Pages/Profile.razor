@@ -1,0 +1,159 @@
+@page "/profile"
+@attribute [Authorize]
+@using System.Security.Claims
+@using ProjectHub.Web.Client.Http
+@inject AuthenticationStateProvider AuthProvider
+@inject AuthApiClient AuthApi
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Profile · ProjectHub</PageTitle>
+
+@* The signed-in user's own account view.
+
+   WHY THIS IS READ-ONLY
+   Everything shown here comes from the access token we already hold — there is no GET /api/users/me endpoint, and
+   no endpoint for changing a name or email either. Rather than build a form whose Save button could not work, the
+   page presents what is genuinely known and offers the two account actions the API DOES support: changing the
+   password (through the existing reset flow) and signing out.
+
+   The claims are a UI convenience only. The API re-validates the token's signature on every request, so nothing
+   displayed here is load-bearing for authorization. *@
+
+<PageHeader Title="Profile" Subtitle="Your account details" />
+
+<MudGrid>
+    <MudItem xs="12" md="7">
+        <MudPaper Class="ph-card pa-6" Elevation="0">
+            <div class="d-flex align-center gap-4 mb-6">
+                <MudAvatar Color="Color.Primary" Style="width:72px;height:72px;font-size:1.75rem;">
+                    @_initial
+                </MudAvatar>
+                <div style="min-width:0;">
+                    <MudText Typo="Typo.h6" Style="font-weight:700; overflow-wrap:anywhere;">
+                        @(_email ?? "Unknown account")
+                    </MudText>
+                    @if (_roles.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            @foreach (var role in _roles)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
+                                    @role
+                                </MudChip>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <MudDivider Class="mb-4" />
+
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-1">Email</MudText>
+            <MudText Typo="Typo.body1" Class="mb-4">@(_email ?? "—")</MudText>
+
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-1">User ID</MudText>
+            @* Shown, and copyable, precisely because the Add Member dialog needs one: with no user-lookup endpoint
+               on the API, this page is where a teammate gets the id to hand over. *@
+            <div class="d-flex align-center gap-2 mb-4">
+                <MudText Typo="Typo.body2" Style="font-family:monospace; overflow-wrap:anywhere;">
+                    @(_userId?.ToString() ?? "—")
+                </MudText>
+                @if (_userId is not null)
+                {
+                    <MudTooltip Text="Copy user ID">
+                        <MudIconButton Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small"
+                                       aria-label="Copy user ID"
+                                       OnClick="CopyUserIdAsync" />
+                    </MudTooltip>
+                }
+            </div>
+
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="rounded-lg">
+                Share your user ID with a project Maintainer or Owner so they can add you to a project.
+            </MudAlert>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="5">
+        <MudPaper Class="ph-card pa-6" Elevation="0">
+            <MudText Typo="Typo.h6" Style="font-weight:700;" Class="mb-1">Account actions</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                Manage your credentials and session.
+            </MudText>
+
+            @* Reuses the forgot-password flow rather than introducing a change-password form: the API has no
+               authenticated change-password endpoint, and the emailed one-time link is the only path it supports.
+               Pointing at the real mechanism is better than a form that would have nowhere to post. *@
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                       StartIcon="@Icons.Material.Outlined.LockReset"
+                       Class="mb-3"
+                       Href="/forgot-password">
+                Change password
+            </MudButton>
+
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true"
+                       StartIcon="@Icons.Material.Outlined.Logout"
+                       OnClick="LogoutAsync">
+                Sign out
+            </MudButton>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string? _email;
+    private Guid? _userId;
+    private string _initial = "?";
+    private List<string> _roles = new();
+
+    [Inject]
+    private IJSRuntime JS { get; set; } = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        var user = state.User;
+
+        _email = user.FindFirst(ClaimTypes.Email)?.Value;
+        _roles = user.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToList();
+
+        if (Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+        {
+            _userId = userId;
+        }
+
+        _initial = string.IsNullOrWhiteSpace(_email)
+            ? "?"
+            : char.ToUpperInvariant(_email[0]).ToString();
+    }
+
+    private async Task CopyUserIdAsync()
+    {
+        if (_userId is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _userId.Value.ToString());
+            Snackbar.Add("User ID copied to your clipboard.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            // The Clipboard API requires a secure context and can be blocked by permissions policy. The id is
+            // already on screen and selectable, so a failure here is an inconvenience, not a dead end.
+            Snackbar.Add("Could not access the clipboard. Select the ID and copy it manually.", Severity.Warning);
+        }
+    }
+
+    private async Task LogoutAsync()
+    {
+        await AuthApi.LogoutAsync();
+
+        // forceLoad:true tears down the circuit so no service keeps this user's cached data alive on the login
+        // page — which matters on a shared machine.
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+}

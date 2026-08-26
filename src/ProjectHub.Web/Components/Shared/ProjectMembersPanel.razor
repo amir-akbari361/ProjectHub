@@ -1,0 +1,469 @@
+@using System.Security.Claims
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject MembersApiClient MembersApi
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+@*
+    PROJECT MEMBERS PANEL — the roster, with add / change-role / remove.
+
+    THE ROLE MODEL THIS UI MIRRORS (all re-enforced server-side; this only decides what to OFFER):
+      • Viewer      — read only
+      • Contributor — may create and mutate tasks, comment, upload
+      • Maintainer  — the above, plus manage the roster and edit the project
+      • Owner       — the above, plus archive the project and manage other owners
+
+    Three server rules shape the controls below, and each is worth naming because the UI would be misleading
+    without them:
+      1. Only a Maintainer or Owner may manage the roster at all.
+      2. Only an OWNER may grant or revoke the Owner role, or remove an existing owner. A Maintainer editing an
+         owner gets a 403, so those rows are locked for them.
+      3. The LAST owner cannot be removed or demoted — a project without an owner could never be archived or have
+         its roster changed again. The server returns 409; we disable the control instead of letting a user
+         discover that by hitting it.
+
+    Any member may remove THEMSELVES (leave the project) regardless of role, which is why the remove control is
+    offered on your own row even to a Contributor.
+*@
+
+<div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-4">
+    <div>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">Members</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @Members.Count @(Members.Count == 1 ? "person has" : "people have") access to this project
+        </MudText>
+    </div>
+
+    @if (_canManage && !ReadOnly)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenAddDialog">
+            Add member
+        </MudButton>
+    }
+</div>
+
+@if (Members.Count == 0)
+{
+    <EmptyState Icon="@Icons.Material.Outlined.GroupAdd"
+                Title="No members yet"
+                Message="Add team members so they can see and work on this project."
+                IconFontSize="3rem" />
+}
+else
+{
+    <MudPaper Class="ph-card" Elevation="0">
+        <MudList T="string" Class="py-0">
+            @foreach (var member in OrderedMembers)
+            {
+                <MudListItem T="string" @key="member.UserId">
+                    <div class="d-flex align-center justify-space-between gap-3 flex-wrap">
+                        <div class="d-flex align-center gap-3" style="min-width:0;">
+                            <MudAvatar Color="Color.Primary" Size="Size.Medium">
+                                @_lookup.Initial(member.UserId)
+                            </MudAvatar>
+                            <div style="min-width:0;">
+                                <div class="d-flex align-center gap-2 flex-wrap">
+                                    <MudText Typo="Typo.body1" Style="font-weight:600;">@member.FullName</MudText>
+                                    @if (member.UserId == CurrentUserId)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                                                 Color="Color.Info">You</MudChip>
+                                    }
+                                </div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @member.Email · joined @DisplayText.RelativeTime(member.JoinedAtUtc)
+                                </MudText>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-center gap-2">
+                            @if (CanEditRoleOf(member) && !ReadOnly)
+                            {
+                                <MudSelect T="ProjectRole" Value="member.Role"
+                                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                           Style="min-width:150px;"
+                                           Disabled="@(_busyUserId == member.UserId)"
+                                           ValueChanged="@(role => ChangeRoleAsync(member, role))"
+                                           aria-label="@($"Role for {member.FullName}")">
+                                    @foreach (var role in SelectableRoles)
+                                    {
+                                        <MudSelectItem T="ProjectRole" Value="role">
+                                            @DisplayText.Humanize(role)
+                                        </MudSelectItem>
+                                    }
+                                </MudSelect>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="@RoleLockReason(member)">
+                                    <MudChip T="string" Size="Size.Small" Color="@RoleColor(member.Role)"
+                                             Variant="Variant.Filled">
+                                        @DisplayText.Humanize(member.Role)
+                                    </MudChip>
+                                </MudTooltip>
+                            }
+
+                            @if (CanRemove(member) && !ReadOnly)
+                            {
+                                <MudTooltip Text="@(member.UserId == CurrentUserId ? "Leave this project" : $"Remove {member.FullName}")">
+                                    <MudIconButton Icon="@Icons.Material.Outlined.PersonRemove"
+                                                   Color="Color.Error"
+                                                   Size="Size.Small"
+                                                   Disabled="@(_busyUserId == member.UserId)"
+                                                   aria-label="@(member.UserId == CurrentUserId ? "Leave this project" : $"Remove {member.FullName}")"
+                                                   OnClick="@(() => RemoveAsync(member))" />
+                                </MudTooltip>
+                            }
+                        </div>
+                    </div>
+                </MudListItem>
+
+                @if (member.UserId != OrderedMembers[^1].UserId)
+                {
+                    <MudDivider />
+                }
+            }
+        </MudList>
+    </MudPaper>
+}
+
+<MudDialog @bind-Visible="_addOpen" Options="DialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Class="mr-2" />Add member
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @* HONEST ABOUT A REAL API LIMITATION: AddMember takes a user ID, and there is no user-search or
+           user-directory endpoint to resolve an email address into one. Rather than pretend otherwise with an email
+           field that cannot work, the form asks for the id it actually needs and says where to get it. A
+           GET /api/users?search= endpoint is the missing piece that would turn this into an email autocomplete. *@
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-4 rounded-lg">
+            The API identifies people by user ID. Ask the person for theirs, or copy it from an existing project's
+            roster.
+        </MudAlert>
+
+        <EditForm Model="_addModel" OnValidSubmit="AddAsync" id="add-member-form">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="_addModel.UserId" For="@(() => _addModel.UserId)"
+                          Label="User ID" Variant="Variant.Outlined" Immediate="true"
+                          Placeholder="00000000-0000-0000-0000-000000000000"
+                          Class="mb-3" />
+
+            <MudSelect @bind-Value="_addModel.Role" Label="Role" Variant="Variant.Outlined" T="ProjectRole"
+                       HelperText="@RoleHelperText(_addModel.Role)">
+                @foreach (var role in SelectableRoles)
+                {
+                    <MudSelectItem T="ProjectRole" Value="role">@DisplayText.Humanize(role)</MudSelectItem>
+                }
+            </MudSelect>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _addOpen = false)" Disabled="_adding">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="add-member-form"
+                   Variant="Variant.Filled" Color="Color.Primary" Disabled="_adding">
+            @if (_adding)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Add
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<MemberItem> Members { get; set; } = Array.Empty<MemberItem>();
+
+    /// <summary>The signed-in user, needed for the self-row affordances and the permission checks.</summary>
+    [Parameter]
+    public Guid? CurrentUserId { get; set; }
+
+    /// <summary>
+    /// True for an archived project: the roster is still readable but no longer editable, matching how the rest of
+    /// the app treats an archived project as a historical record.
+    /// </summary>
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    /// <summary>Raised after any successful mutation so the parent can re-list the roster.</summary>
+    [Parameter]
+    public EventCallback MembersChanged { get; set; }
+
+    private static readonly DialogOptions DialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true
+    };
+
+    /// <summary>
+    /// Roles offered in the dropdowns, highest first so the most privileged option is not buried. Taken from the
+    /// domain enum rather than hand-listed so a new role cannot be silently unofferable.
+    /// </summary>
+    private static readonly ProjectRole[] SelectableRoles =
+        Enum.GetValues<ProjectRole>().OrderByDescending(role => role).ToArray();
+
+    private MemberLookup _lookup = MemberLookup.Empty;
+    private bool _canManage;
+    private bool _isOwner;
+    private int _ownerCount;
+
+    private Guid? _busyUserId;
+    private bool _addOpen;
+    private bool _adding;
+    private readonly AddMemberModel _addModel = new();
+
+    /// <summary>
+    /// The roster sorted by descending role then name — the order a person reads a team in ("who is in charge
+    /// here?" first). The API returns a similar order, but sorting locally means the panel is not silently
+    /// dependent on that and stays stable after an optimistic local change.
+    /// </summary>
+    private IReadOnlyList<MemberItem> OrderedMembers { get; set; } = Array.Empty<MemberItem>();
+
+    private sealed class AddMemberModel
+    {
+        // Bound as a string, not a Guid, so a half-typed id is a VALIDATION message on the field rather than a
+        // binding failure that silently discards the keystroke.
+        [Required(ErrorMessage = "A user ID is required")]
+        [RegularExpression(
+            @"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            ErrorMessage = "Enter a valid user ID (a GUID)")]
+        public string UserId { get; set; } = string.Empty;
+
+        public ProjectRole Role { get; set; } = ProjectRole.Contributor;
+
+        public void Reset()
+        {
+            UserId = string.Empty;
+            Role = ProjectRole.Contributor;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        _lookup = MemberLookup.From(Members);
+        _canManage = _lookup.CanManage(CurrentUserId);
+        _isOwner = _lookup.IsOwner(CurrentUserId);
+
+        // Needed for the last-owner guard. Recomputed here rather than cached because the roster changes under us
+        // after every mutation.
+        _ownerCount = Members.Count(member => member.Role == ProjectRole.Owner);
+
+        OrderedMembers = Members
+            .OrderByDescending(member => member.Role)
+            .ThenBy(member => member.FullName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Whether the caller may change this member's role. Encodes server rules 1–3 above.
+    /// </summary>
+    private bool CanEditRoleOf(MemberItem member)
+    {
+        if (!_canManage)
+        {
+            return false;
+        }
+
+        // Touching the owner tier — either this member IS an owner, or granting Owner would be an option in the
+        // dropdown — is owner-only.
+        if (member.Role == ProjectRole.Owner && !_isOwner)
+        {
+            return false;
+        }
+
+        // The last owner cannot be demoted; a project with no owner is unmanageable.
+        if (member.Role == ProjectRole.Owner && _ownerCount <= 1)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether the caller may remove this member. Self-removal (leaving) is always allowed except for a last owner,
+    /// who would strand the project.
+    /// </summary>
+    private bool CanRemove(MemberItem member)
+    {
+        if (member.Role == ProjectRole.Owner && _ownerCount <= 1)
+        {
+            return false;
+        }
+
+        if (member.UserId == CurrentUserId)
+        {
+            return true;
+        }
+
+        if (!_canManage)
+        {
+            return false;
+        }
+
+        // Removing an owner is owner-only.
+        return member.Role != ProjectRole.Owner || _isOwner;
+    }
+
+    /// <summary>Explains a locked role chip, so a disabled control is never unexplained.</summary>
+    private string RoleLockReason(MemberItem member)
+    {
+        if (ReadOnly)
+        {
+            return "This project is archived";
+        }
+
+        if (!_canManage)
+        {
+            return "Only a Maintainer or Owner can change roles";
+        }
+
+        if (member.Role == ProjectRole.Owner && _ownerCount <= 1)
+        {
+            return "The last owner's role cannot be changed";
+        }
+
+        if (member.Role == ProjectRole.Owner && !_isOwner)
+        {
+            return "Only an Owner can change another Owner's role";
+        }
+
+        return DisplayText.Humanize(member.Role);
+    }
+
+    private static string RoleHelperText(ProjectRole role) => role switch
+    {
+        ProjectRole.Viewer => "Can view the project, its tasks and its files.",
+        ProjectRole.Contributor => "Can create and update tasks, comment, and upload files.",
+        ProjectRole.Maintainer => "Everything a Contributor can do, plus manage members and edit the project.",
+        ProjectRole.Owner => "Full control, including archiving the project and managing other owners.",
+        _ => string.Empty
+    };
+
+    private static Color RoleColor(ProjectRole role) => role switch
+    {
+        ProjectRole.Owner => Color.Primary,
+        ProjectRole.Maintainer => Color.Secondary,
+        ProjectRole.Contributor => Color.Info,
+        _ => Color.Default
+    };
+
+    private void OpenAddDialog()
+    {
+        _addModel.Reset();
+        _addOpen = true;
+    }
+
+    private async Task AddAsync()
+    {
+        // The regex on the model has already proven the format, so this parse cannot fail — but Guid.Parse would
+        // throw if it somehow did, and a TryParse keeps the failure a message rather than a crashed circuit.
+        if (!Guid.TryParse(_addModel.UserId.Trim(), out var userId))
+        {
+            Snackbar.Add("That does not look like a valid user ID.", Severity.Warning);
+            return;
+        }
+
+        if (Members.Any(member => member.UserId == userId))
+        {
+            // The API answers 409 for this. Catching it locally gives a clearer message and names the person.
+            Snackbar.Add(
+                $"{_lookup.DisplayName(userId)} is already a member of this project.",
+                Severity.Info);
+            return;
+        }
+
+        _adding = true;
+        var result = await MembersApi.AddAsync(ProjectId, userId, _addModel.Role);
+        _adding = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to add the member.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Member added.", Severity.Success);
+        _addOpen = false;
+
+        // Re-list rather than appending locally: the add response carries only a membership id, while a roster row
+        // needs the email and full name the list projection joins in.
+        await MembersChanged.InvokeAsync();
+    }
+
+    private async Task ChangeRoleAsync(MemberItem member, ProjectRole role)
+    {
+        if (member.Role == role)
+        {
+            return;
+        }
+
+        // Granting Owner is owner-only on the server. Checked here too so a Maintainer gets an explanation rather
+        // than a bare 403 — the dropdown has to OFFER Owner for an owner to use it, so the guard belongs on use.
+        if (role == ProjectRole.Owner && !_isOwner)
+        {
+            Snackbar.Add("Only an Owner can grant the Owner role.", Severity.Warning);
+            return;
+        }
+
+        _busyUserId = member.UserId;
+        var result = await MembersApi.ChangeRoleAsync(ProjectId, member.UserId, role);
+        _busyUserId = null;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to change the role.", Severity.Error);
+            // Re-list so the dropdown snaps back to the role the server still holds, rather than showing the
+            // rejected selection as though it had been applied.
+            await MembersChanged.InvokeAsync();
+            return;
+        }
+
+        Snackbar.Add($"{member.FullName} is now a {DisplayText.Humanize(role)}.", Severity.Success);
+        await MembersChanged.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(MemberItem member)
+    {
+        var isSelf = member.UserId == CurrentUserId;
+
+        // Removal is destructive and not undoable from this screen, so it is confirmed. The wording differs for
+        // self-removal because the consequence differs: you lose your own access.
+        var confirmed = await DialogService.ShowMessageBox(
+            isSelf ? "Leave project" : "Remove member",
+            isSelf
+                ? "You will lose access to this project and its tasks. Continue?"
+                : $"Remove {member.FullName} from this project? They will lose access immediately.",
+            yesText: isSelf ? "Leave" : "Remove",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        _busyUserId = member.UserId;
+        var result = await MembersApi.RemoveAsync(ProjectId, member.UserId);
+        _busyUserId = null;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to remove the member.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add(isSelf ? "You have left the project." : $"{member.FullName} was removed.", Severity.Success);
+        await MembersChanged.InvokeAsync();
+    }
+}

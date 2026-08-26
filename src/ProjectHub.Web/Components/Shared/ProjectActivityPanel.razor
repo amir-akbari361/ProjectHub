@@ -1,0 +1,185 @@
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject AuditLogsApiClient AuditLogsApi
+
+@*
+    PROJECT ACTIVITY PANEL — the project's immutable audit trail, newest first.
+
+    WHY THIS IS SCOPED TO THE PROJECT ENTITY AND NOT "EVERYTHING IN THE PROJECT"
+    The API's audit endpoint is keyed on (entityName, entityId) — it answers "the history OF this record". There is
+    no aggregate "everything that happened inside project X" query, because that would mean fanning out across every
+    task, comment and attachment the project has ever owned. So this panel shows the PROJECT's own trail: created,
+    renamed, archived, roster changes recorded against it. That is a truthful scope, and the heading says so rather
+    than implying a completeness the endpoint cannot deliver.
+
+    WHY IT LOADS ON DEMAND
+    Activity is the least-visited tab and its query hits an append-only table that grows without bound. Fetching it
+    eagerly with the project would slow the page every user sees to serve the one who opens this tab. The parent
+    signals the first open via Activate.
+*@
+
+<div class="mb-4">
+    <MudText Typo="Typo.h6" Style="font-weight:700;">Activity</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        Changes recorded against this project
+    </MudText>
+</div>
+
+@if (_loading)
+{
+    <ListSkeleton Count="4" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_entries.Count == 0)
+{
+    <EmptyState Icon="@Icons.Material.Outlined.History"
+                Title="No recorded activity"
+                Message="Changes to this project will appear here."
+                IconFontSize="3rem" />
+}
+else
+{
+    <MudTimeline TimelinePosition="TimelinePosition.Start" Class="ph-activity">
+        @foreach (var entry in _entries)
+        {
+            <MudTimelineItem Color="@ActionColor(entry.Action)" Size="Size.Small" @key="entry.Id">
+                <ItemContent>
+                    <MudPaper Class="ph-card pa-3" Elevation="0">
+                        <div class="d-flex align-center justify-space-between gap-2 flex-wrap">
+                            <MudText Typo="Typo.body2" Style="font-weight:600;">
+                                @DisplayText.Humanize(entry.Action)
+                            </MudText>
+                            <MudTooltip Text="@entry.CreatedAtUtc.ToLocalTime().ToString("f")">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @DisplayText.RelativeTime(entry.CreatedAtUtc)
+                                </MudText>
+                            </MudTooltip>
+                        </div>
+
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            by @Members.DisplayName(entry.PerformedBy)
+                        </MudText>
+
+                        @if (!string.IsNullOrWhiteSpace(entry.Changes))
+                        {
+                            @* The diff is free-form JSON written by the server. It is shown COLLAPSED and in a
+                               monospace block: it is diagnostic detail, valuable when you need it and noise when
+                               you do not, and it is rendered as escaped text — never as markup — because it
+                               contains user-supplied field values. *@
+                            <MudExpansionPanels Elevation="0" Class="mt-2">
+                                <MudExpansionPanel Text="Details" Dense="true" Class="ph-activity-details">
+                                    <pre class="ph-activity-json">@entry.Changes</pre>
+                                </MudExpansionPanel>
+                            </MudExpansionPanels>
+                        }
+                    </MudPaper>
+                </ItemContent>
+            </MudTimelineItem>
+        }
+    </MudTimeline>
+
+    @if (_totalPages > 1)
+    {
+        <div class="d-flex justify-center mt-4">
+            <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_pageNumber"
+                           SelectedChanged="LoadPageAsync" />
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid ProjectId { get; set; }
+
+    /// <summary>The roster, so a PerformedBy id can be shown as a person rather than a GUID.</summary>
+    [Parameter]
+    public MemberLookup Members { get; set; } = MemberLookup.Empty;
+
+    /// <summary>
+    /// Set true by the parent when its Activity tab is first opened. Load-on-demand: see the header comment for
+    /// why this is not fetched with the rest of the project.
+    /// </summary>
+    [Parameter]
+    public bool Activate { get; set; }
+
+    private const int PageSize = 20;
+
+    private List<AuditLogItem> _entries = new();
+    private bool _loading;
+    private string? _error;
+    private int _pageNumber = 1;
+    private int _totalPages;
+
+    // Guards against re-fetching every time the parent re-renders with Activate still true — which happens on each
+    // keystroke elsewhere on the page.
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Activate || _loaded)
+        {
+            return;
+        }
+
+        _loaded = true;
+        await LoadPageAsync(1);
+    }
+
+    private async Task LoadPageAsync(int page)
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await AuditLogsApi.ListAsync(
+            AuditedEntity.Project, ProjectId, pageNumber: page, pageSize: PageSize);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Failed to load activity.";
+            _entries = new();
+            _totalPages = 0;
+        }
+        else
+        {
+            _entries = result.Value.Items;
+            _totalPages = result.Value.TotalPages;
+            _pageNumber = result.Value.PageNumber;
+        }
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Colours the timeline dot by the KIND of change, so a trail can be skimmed for the destructive entries.
+    /// Matched on a substring because the action is a free-form string written by each handler ("ProjectArchived",
+    /// "MemberRemoved"), not a closed enum — a prefix match would miss anything named differently.
+    /// </summary>
+    private static Color ActionColor(string action)
+    {
+        if (action.Contains("Delete", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Remove", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Archive", StringComparison.OrdinalIgnoreCase))
+        {
+            return Color.Error;
+        }
+
+        if (action.Contains("Create", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Add", StringComparison.OrdinalIgnoreCase))
+        {
+            return Color.Success;
+        }
+
+        if (action.Contains("Update", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Change", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Edit", StringComparison.OrdinalIgnoreCase))
+        {
+            return Color.Info;
+        }
+
+        return Color.Default;
+    }
+}

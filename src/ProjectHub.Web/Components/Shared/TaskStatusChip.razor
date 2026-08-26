@@ -1,0 +1,26 @@
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+
+@* Status chip for a TASK. Colour tracks workflow progress — grey backlog, blue in-flight, amber awaiting
+   review, green finished — so a board or list communicates state before the label is read. *@
+
+<MudChip T="string" Size="@Size" Variant="Variant.Outlined" Color="@ColorFor(Status)">
+    @DisplayText.Humanize(Status)
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectTaskStatus Status { get; set; }
+
+    [Parameter]
+    public Size Size { get; set; } = Size.Small;
+
+    private static Color ColorFor(ProjectTaskStatus status) => status switch
+    {
+        ProjectTaskStatus.Todo => Color.Default,
+        ProjectTaskStatus.InProgress => Color.Info,
+        ProjectTaskStatus.InReview => Color.Warning,
+        ProjectTaskStatus.Done => Color.Success,
+        _ => Color.Default
+    };
+}

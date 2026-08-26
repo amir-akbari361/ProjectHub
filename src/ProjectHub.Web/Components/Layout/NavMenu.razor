@@ -1,8 +1,13 @@
-﻿@* A modern navigation menu with pill-shaped active states and semantic icons. The ph-nav class applies
-   subtle brand gradients to active links so they feel part of the same visual family as the app bar. *@
+@* The drawer's primary navigation. Only genuinely global destinations belong here — anything project-scoped
+   (board, members, activity) lives on the project itself, because a nav entry that needs a project id has nothing
+   to point at from the drawer.
+
+   Match="NavLinkMatch.All" on the dashboard is required: the default (Prefix) would treat "/" as a prefix of every
+   route and leave Dashboard highlighted on every page. *@
 
 <MudNavMenu Class="ph-nav mt-4">
-    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Primary">
+    <MudNavLink Href="/" Match="NavLinkMatch.All"
+                Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Primary">
         Dashboard
     </MudNavLink>
 
@@ -18,5 +23,11 @@
 
     <MudNavLink Href="/search" Icon="@Icons.Material.Outlined.Search" IconColor="Color.Tertiary">
         Search
+    </MudNavLink>
+
+    <MudDivider Class="my-3 mx-4" />
+
+    <MudNavLink Href="/profile" Icon="@Icons.Material.Outlined.Person" IconColor="Color.Secondary">
+        Profile
     </MudNavLink>
 </MudNavMenu>

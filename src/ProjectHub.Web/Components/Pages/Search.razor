@@ -1,5 +1,7 @@
 @page "/search"
 @attribute [Authorize]
+@using ProjectHub.Application.Features.Search.GlobalSearch
+@using ProjectHub.Web.Client.Formatting
 @using ProjectHub.Web.Client.Http
 @using ProjectHub.Web.Client.Models
 @inject SearchApiClient SearchApi
@@ -7,92 +9,162 @@
 
 <PageTitle>Search · ProjectHub</PageTitle>
 
-@* Global search across projects and tasks. The query runs on Enter or the search button (not on every
-   keystroke) so we don't hammer the API; results are grouped by type and clicking a row navigates to the
-   underlying entity. *@
+@* Global search across the caller's projects and their tasks.
 
-<div class="ph-page-header">
-    <div>
-        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:800;">Search</MudText>
-        <MudText Typo="Typo.body1" Color="Color.Secondary">Find projects and tasks across your workspace</MudText>
-    </div>
+   THE TERM LIVES IN THE QUERY STRING (?q=…), not just in component state. That makes a result set shareable and
+   reload-proof, and it is what lets the app bar's quick-search hand off to this page by simply navigating. The
+   [SupplyParameterFromQuery] binding means arriving with a term runs the search immediately.
+
+   The search fires on Enter or the button, never per keystroke: the API enforces a minimum term length and each
+   call is a two-table scan, so debounced-as-you-type would spend a lot of server work on prefixes nobody meant. *@
+
+<PageHeader Title="Search" Subtitle="Find projects and tasks across your workspace" />
+
+<div class="d-flex align-center gap-2 mb-6">
+    <MudTextField T="string" @bind-Value="_term"
+                  Placeholder="Search projects and tasks…"
+                  Variant="Variant.Outlined"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true"
+                  Clearable="true"
+                  OnKeyUp="OnKeyUp"
+                  aria-label="Search term" />
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+               StartIcon="@Icons.Material.Filled.Search"
+               OnClick="@(() => RunSearchAsync(page: 1))"
+               Disabled="_searching">
+        Search
+    </MudButton>
 </div>
-
-<MudTextField @bind-Value="_term" Placeholder="Search projects and tasks…"
-              Variant="Variant.Outlined" Adornment="Adornment.Start"
-              AdornmentIcon="@Icons.Material.Filled.Search" Immediate="false"
-              OnKeyUp="OnKeyUp" Class="mb-6" Clearable="true" />
 
 @if (_searching)
 {
-    <MudStack Spacing="2">
-        @for (var i = 0; i < 4; i++)
-        {
-            <MudPaper Class="ph-card pa-4" Elevation="0">
-                <MudSkeleton Width="50%" Height="22px" />
-                <MudSkeleton Width="80%" Height="16px" Class="mt-2" />
-            </MudPaper>
-        }
-    </MudStack>
+    <ListSkeleton Count="4" />
 }
 else if (_error is not null)
 {
     <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
 }
-else if (_hasSearched && _results.Count == 0)
+else if (!_hasSearched)
 {
-    <div class="ph-empty">
-        <MudIcon Icon="@Icons.Material.Outlined.SearchOff" Size="Size.Large" Style="font-size:4rem;" />
-        <MudText Typo="Typo.h6" Class="mt-3">No results</MudText>
-        <MudText Typo="Typo.body2">Nothing matched "@_lastTerm". Try a different search.</MudText>
-    </div>
+    <EmptyState Icon="@Icons.Material.Outlined.ManageSearch"
+                Title="Search your workspace"
+                Message="Type at least 2 characters and press Enter to find projects and tasks." />
 }
-else if (_results.Count > 0)
+else if (_results.Count == 0)
 {
+    <EmptyState Icon="@Icons.Material.Outlined.SearchOff"
+                Title="No results"
+                Message="@($"Nothing matched \"{_lastTerm}\". Try a different search.")" />
+}
+else
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+        @_totalCount @(_totalCount == 1 ? "result" : "results") for "@_lastTerm"
+    </MudText>
+
     <MudStack Spacing="2">
-        @foreach (var r in _results)
+        @foreach (var result in _results)
         {
-            <MudPaper Class="ph-card ph-card-hover pa-4 d-flex align-center" Elevation="0"
-                      @onclick="@(() => NavigateTo(r))">
-                <MudIcon Icon="@IconFor(r.Type)" Color="Color.Primary" Class="mr-3" />
-                <div class="flex-grow-1">
-                    <MudText Typo="Typo.body1" Style="font-weight:600;">@r.Title</MudText>
-                    @if (!string.IsNullOrWhiteSpace(r.Snippet))
-                    {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">@r.Snippet</MudText>
-                    }
+            <MudPaper Class="ph-card ph-card-hover pa-4" Elevation="0" @key="result.Id"
+                      role="link"
+                      tabindex="0"
+                      aria-label="@($"Open {DisplayText.Humanize(result.Type)} {result.Title}")"
+                      @onclick="@(() => NavigateTo(result))"
+                      @onkeydown="@(e => OnResultKeyDown(e, result))">
+                <div class="d-flex align-center gap-3">
+                    <MudIcon Icon="@IconFor(result.Type)" Color="Color.Primary" />
+                    <div class="flex-grow-1" style="min-width:0;">
+                        <MudText Typo="Typo.body1" Style="font-weight:600; overflow-wrap:anywhere;">
+                            @result.Title
+                        </MudText>
+                        @if (!string.IsNullOrWhiteSpace(result.Description))
+                        {
+                            @* Truncated to one line: a result row is a scanning surface, and a task with a
+                               thousand-character description would otherwise push every other hit off-screen. *@
+                            <MudText Typo="Typo.body2" Color="Color.Secondary"
+                                     Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                @result.Description
+                            </MudText>
+                        }
+                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-none d-sm-flex">
+                        @DisplayText.RelativeTime(result.CreatedAtUtc)
+                    </MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                        @DisplayText.Humanize(result.Type)
+                    </MudChip>
                 </div>
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@r.Type</MudChip>
             </MudPaper>
         }
     </MudStack>
+
+    @if (_totalPages > 1)
+    {
+        <div class="d-flex justify-center mt-6">
+            <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_pageNumber"
+                           SelectedChanged="@(page => RunSearchAsync(page))" />
+        </div>
+    }
 }
 
 @code {
+    /// <summary>Minimum term length. Mirrors the API's validator so we do not spend a request on a certain 400.</summary>
+    private const int MinimumTermLength = 2;
+
+    private const int PageSize = 20;
+
     private string _term = string.Empty;
     private string _lastTerm = string.Empty;
     private bool _searching;
     private bool _hasSearched;
     private string? _error;
+
     private List<SearchResult> _results = new();
+    private int _pageNumber = 1;
+    private int _totalPages;
+    private int _totalCount;
+
+    /// <summary>
+    /// The term from the URL. Bound from <c>?q=</c> — the same parameter name the API uses — so the app bar's
+    /// quick-search can hand off by navigation alone, with no shared state between the two components.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "q")]
+    private string? QueryTerm { get; set; }
+
+    // OnParametersSetAsync rather than OnInitializedAsync: the user can search again from the app bar while
+    // already on this page, which changes the query parameter WITHOUT re-creating the component. Initializing
+    // only once would leave the old results on screen under a new URL.
+    protected override async Task OnParametersSetAsync()
+    {
+        var incoming = QueryTerm?.Trim();
+
+        if (string.IsNullOrWhiteSpace(incoming) || incoming == _lastTerm)
+        {
+            return;
+        }
+
+        _term = incoming;
+        await RunSearchAsync(page: 1);
+    }
 
     private async Task OnKeyUp(KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
         {
-            await RunSearchAsync();
+            await RunSearchAsync(page: 1);
         }
     }
 
-    private async Task RunSearchAsync()
+    private async Task RunSearchAsync(int page)
     {
         var term = _term?.Trim() ?? string.Empty;
 
-        // The API requires a minimum term length; short-circuit locally so we don't fire a request we
-        // know will be rejected.
-        if (term.Length < 2)
+        if (term.Length < MinimumTermLength)
         {
-            _error = "Enter at least 2 characters to search.";
+            _error = $"Enter at least {MinimumTermLength} characters to search.";
             _results = new();
             _hasSearched = false;
             return;
@@ -101,16 +173,21 @@ else if (_results.Count > 0)
         _searching = true;
         _error = null;
 
-        var result = await SearchApi.SearchAsync(term);
+        var result = await SearchApi.SearchAsync(term, pageNumber: page, pageSize: PageSize);
 
         if (!result.IsSuccess || result.Value is null)
         {
             _error = result.Error ?? "Search failed.";
             _results = new();
+            _totalPages = 0;
+            _totalCount = 0;
         }
         else
         {
-            _results = result.Value;
+            _results = result.Value.Items;
+            _totalPages = result.Value.TotalPages;
+            _totalCount = result.Value.TotalCount;
+            _pageNumber = result.Value.PageNumber;
         }
 
         _lastTerm = term;
@@ -118,24 +195,35 @@ else if (_results.Count > 0)
         _searching = false;
     }
 
-    // Routes a result to the correct page based on its type. Tasks need their owning project id, which
-    // the API includes in the result.
-    private void NavigateTo(SearchResult r)
+    /// <summary>
+    /// Opens a hit. Both kinds land on the owning project — a Project hit's <c>ProjectId</c> is its own id, which
+    /// is why the API populates it for both and this needs no branch on the destination.
+    /// </summary>
+    private void NavigateTo(SearchResult result)
     {
-        if (string.Equals(r.Type, "Project", StringComparison.OrdinalIgnoreCase))
+        // A task hit deep-links to the board so the task is visible in its workflow column; a project hit opens
+        // the project overview.
+        var destination = result.Type == SearchResultType.Task
+            ? $"/projects/{result.ProjectId}/board"
+            : $"/projects/{result.ProjectId}";
+
+        Nav.NavigateTo(destination);
+    }
+
+    // The result row is a div, so it needs explicit keyboard activation to match the role/tabindex that put it
+    // in the tab order.
+    private void OnResultKeyDown(KeyboardEventArgs e, SearchResult result)
+    {
+        if (e.Key is "Enter" or " ")
         {
-            Nav.NavigateTo($"/projects/{r.Id}");
-        }
-        else if (string.Equals(r.Type, "Task", StringComparison.OrdinalIgnoreCase) && r.ProjectId.HasValue)
-        {
-            Nav.NavigateTo($"/projects/{r.ProjectId}");
+            NavigateTo(result);
         }
     }
 
-    private static string IconFor(string type) => type.ToLowerInvariant() switch
+    private static string IconFor(SearchResultType type) => type switch
     {
-        "project" => Icons.Material.Filled.Folder,
-        "task" => Icons.Material.Filled.Task,
+        SearchResultType.Project => Icons.Material.Filled.Folder,
+        SearchResultType.Task => Icons.Material.Filled.Task,
         _ => Icons.Material.Filled.Article
     };
 }

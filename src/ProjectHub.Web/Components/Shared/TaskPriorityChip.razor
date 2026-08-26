@@ -1,0 +1,19 @@
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Theme
+
+@* Priority chip for a TASK. The colour comes from ProjectHubTheme so the chip and the accent bar on a task
+   card can never disagree about what "High" looks like. *@
+
+<MudChip T="string" Size="@Size" Variant="Variant.Filled"
+         Style="@($"background-color:{ProjectHubTheme.PriorityColor(Priority)}; color:#fff;")">
+    @DisplayText.Humanize(Priority)
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public TaskPriority Priority { get; set; }
+
+    [Parameter]
+    public Size Size { get; set; } = Size.Small;
+}

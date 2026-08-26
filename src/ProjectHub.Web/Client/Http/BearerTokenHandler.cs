@@ -5,36 +5,31 @@ using ProjectHub.Web.Client.Auth;
 namespace ProjectHub.Web.Client.Http;
 
 /// <summary>
-/// A <see cref="DelegatingHandler"/> that attaches the current access token as an
-/// <c>Authorization: Bearer &lt;jwt&gt;</c> header to every outgoing request made through a typed
-/// <see cref="HttpClient"/> it is registered on.
+/// A <see cref="DelegatingHandler"/> that attaches the current access token as
+/// <c>Authorization: Bearer &lt;jwt&gt;</c> to every request made through a typed client it is registered on.
 /// </summary>
 /// <remarks>
 /// WHY A DELEGATING HANDLER INSTEAD OF SETTING THE HEADER IN EACH API CLIENT?
-/// ---------------------------------------------------------------------------
-/// An HttpClient message pipeline is a chain of handlers ending in the network transport. A
-/// DelegatingHandler is the idiomatic, cross-cutting place to inject a concern (here: authentication)
-/// that must apply to *every* call without repeating code in each method of each typed client. This is
-/// the Chain-of-Responsibility pattern: each handler does its bit and calls the next. Putting the token
-/// logic here keeps <see cref="ProjectsApiClient"/> and friends focused purely on endpoints and payloads
-/// (Single Responsibility), and guarantees no request can accidentally be sent without the header.
+/// An HttpClient pipeline is a chain of handlers ending in the network transport, and a DelegatingHandler is the
+/// idiomatic place for a cross-cutting concern that must apply to EVERY call. This is Chain of Responsibility:
+/// each handler does its bit and defers to the next. Keeping authentication here leaves
+/// <see cref="ProjectsApiClient"/> and friends focused purely on endpoints and payloads (Single Responsibility),
+/// and makes it structurally impossible to forget the header on a new endpoint.
 ///
-/// WHY READ FROM TokenStore ON EVERY SEND RATHER THAN CAPTURING THE TOKEN ONCE?
-/// The token rotates (login, refresh, logout). Reading the *current* value from the scoped
-/// <see cref="TokenStore"/> at send-time means we always use the freshest token and immediately stop
-/// sending a stale one after logout — without re-wiring any handlers.
+/// WHY IT ASKS <see cref="AccessTokenProvider"/> RATHER THAN READING THE TOKEN ITSELF
+/// The token expires. This handler used to read <c>TokenStore</c> directly and simply omit an expired token,
+/// which meant the first call after the access-token lifetime elapsed silently lost its credentials, 401'd, and
+/// bounced the user to /login in the middle of their work — even though a perfectly valid refresh token was
+/// sitting in storage. Delegating to the provider means an expiring token is RENEWED here, transparently, and
+/// this class keeps its single job of attaching a header.
 ///
-/// WHY RESOLVE TokenStore FROM THE CIRCUIT SCOPE INSTEAD OF INJECTING IT DIRECTLY?
-/// ------------------------------------------------------------------------------
-/// IHttpClientFactory constructs the handler chain in its OWN pooled DI scope, NOT the Blazor circuit's
-/// scope. A TokenStore injected straight into this constructor would therefore be a DIFFERENT instance
-/// than the one the components use — with a disconnected <c>IJSRuntime</c> that can't read localStorage.
-/// The result was a handler that never found a token and produced a 401 on every authenticated call,
-/// even while the UI looked signed in. Instead we resolve TokenStore at send-time from the CIRCUIT'S
-/// service provider, published per-activity by <see cref="ServicesAccessorCircuitHandler"/> and read via
-/// <see cref="CircuitServicesAccessor"/>. That yields the same TokenStore the components use — cached
-/// token, live JS interop — so the correct Bearer header is attached. See CircuitServicesAccessor for
-/// the full rationale.
+/// WHY THE PROVIDER IS RESOLVED FROM THE CIRCUIT SCOPE AT SEND-TIME
+/// IHttpClientFactory builds the handler chain in its OWN pooled DI scope, not the Blazor circuit's. Anything
+/// injected straight into this constructor would therefore be a DIFFERENT instance from the one the components
+/// use — with a disconnected IJSRuntime that cannot read localStorage. That produced a handler which never found
+/// a token and 401'd every authenticated call while the UI looked signed in. Instead we reach into the CIRCUIT'S
+/// service provider, published per inbound activity by <see cref="ServicesAccessorCircuitHandler"/> and read via
+/// <see cref="CircuitServicesAccessor"/>, so we get the same TokenStore the components share.
 /// </remarks>
 public sealed class BearerTokenHandler : DelegatingHandler
 {
@@ -49,29 +44,20 @@ public sealed class BearerTokenHandler : DelegatingHandler
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        // Resolve the CIRCUIT-scoped TokenStore (the one the components use). If we're not inside a
-        // circuit activity — e.g. during pre-render before the circuit exists — Services is null and we
-        // send the request unauthenticated; the framework then renders <NotAuthorized> rather than
-        // firing a doomed API call.
-        var tokenStore = _circuitServicesAccessor.Services?.GetService<TokenStore>();
-        if (tokenStore is null)
+        // Outside a circuit activity — e.g. during pre-render, before the circuit exists — there is no user and
+        // therefore no token. Send unauthenticated and let the framework render <NotAuthorized>.
+        var tokenProvider = _circuitServicesAccessor.Services?.GetService<AccessTokenProvider>();
+
+        if (tokenProvider is null)
         {
             return await base.SendAsync(request, cancellationToken);
         }
 
-        // LoadAsync is cache-first: after the first successful read it returns the in-memory copy, so
-        // this is cheap on every call. During pre-render (no JS yet) it returns null and we simply send
-        // the request unauthenticated — the framework will render <NotAuthorized>, not hit the API.
-        var tokens = await tokenStore.LoadAsync();
+        var accessToken = await tokenProvider.GetAccessTokenAsync();
 
-        // Only attach a token that exists AND has not expired. Sending an expired token would earn a
-        // guaranteed 401; better to send none and let the auth-state/redirect flow take over. (Refresh-
-        // token rotation is handled by the auth flow, not this low-level handler.)
-        if (tokens is not null
-            && !string.IsNullOrWhiteSpace(tokens.AccessToken)
-            && tokens.AccessTokenExpiresAtUtc > DateTime.UtcNow)
+        if (!string.IsNullOrWhiteSpace(accessToken))
         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         }
 
         return await base.SendAsync(request, cancellationToken);

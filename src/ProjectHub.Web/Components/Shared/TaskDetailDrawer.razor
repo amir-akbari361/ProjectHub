@@ -1,0 +1,1006 @@
+@using System.Security.Claims
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@using ProjectHub.Web.Client.Theme
+@inject TasksApiClient TasksApi
+@inject CommentsApiClient CommentsApi
+@inject AttachmentsApiClient AttachmentsApi
+@inject AuthenticationStateProvider AuthProvider
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+@*
+    THE TASK DRAWER — a right-anchored slide-over holding everything a single task owns: its editable fields, its
+    comment thread, and its attachments.
+
+    WHY THIS IS THE ONE PLACE A TASK IS EDITED
+    Both the project's task list and the Kanban board open this panel. Status, priority and assignee editors used
+    to live on the task ROW in the list, which meant the board (whose cards deliberately carry no dropdowns —
+    a select's pointer-down is the same gesture that starts a drag) had no way to reassign or reprioritise at all.
+    Consolidating the editors here gives every surface the same capabilities through one implementation, and leaves
+    exactly one code path that can mutate a task, so there is one place for an optimistic-update bug to live rather
+    than two that drift.
+
+    Dragging a card between columns remains a shortcut for the status change specifically — direct manipulation is
+    faster than opening a panel — and it calls the same endpoint.
+
+    WHY A TEMPORARY DRAWER AND NOT A DIALOG
+    A comment thread is a reading surface: it wants full viewport height and to stay legible while the user scans
+    the list or board behind it. DrawerVariant.Temporary gives that, is deliberately NOT registered with the
+    surrounding MudLayout drawer container (so it never shifts the page or app bar), renders its overlay above the
+    app bar, and closes itself on navigation. Anchor.End respects RTL.
+*@
+<MudDrawer Open="Open"
+           OpenChanged="HandleOpenChangedAsync"
+           Anchor="Anchor.End"
+           Variant="DrawerVariant.Temporary"
+           Overlay="true"
+           OverlayAutoClose="true"
+           Elevation="8"
+           Width="560px"
+           Class="ph-task-drawer">
+    @if (Task is null)
+    {
+        @* Defensive only: the parent never opens the drawer without a task, but a null must render something
+           rather than throwing inside the drawer's render tree. *@
+        <div class="ph-empty">
+            <MudText Typo="Typo.body2">No task selected.</MudText>
+        </div>
+    }
+    else
+    {
+        <div class="ph-task-drawer-head">
+            <div class="d-flex align-start justify-space-between gap-2">
+                <MudText Typo="Typo.h6" Style="font-weight:700; line-height:1.3; overflow-wrap:anywhere;">
+                    @Task.Title
+                </MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Close"
+                               Size="Size.Small"
+                               aria-label="Close task details"
+                               OnClick="CloseAsync" />
+            </div>
+
+            @if (CanEdit)
+            {
+                <MudGrid Spacing="2" Class="mt-3">
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="ProjectTaskStatus" Value="Task.Status" Label="Status"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                   Disabled="_mutating"
+                                   ValueChanged="ChangeStatusAsync">
+                            @foreach (var status in Enum.GetValues<ProjectTaskStatus>())
+                            {
+                                <MudSelectItem T="ProjectTaskStatus" Value="status">
+                                    @DisplayText.Humanize(status)
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="TaskPriority" Value="Task.Priority" Label="Priority"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                   Disabled="_mutating"
+                                   ValueChanged="ChangePriorityAsync">
+                            @foreach (var priority in Enum.GetValues<TaskPriority>())
+                            {
+                                <MudSelectItem T="TaskPriority" Value="priority">
+                                    @DisplayText.Humanize(priority)
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        @* Unassigned is offered so the dropdown can display the current state truthfully, but
+                           selecting it is rejected below: the API's AssignTask command requires a user id and has
+                           no unassign counterpart. Hiding the option would instead make an unassigned task render
+                           with an empty select, which reads as a loading bug. *@
+                        <MudSelect T="Guid?" Value="Task.AssigneeId" Label="Assignee"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                                   Disabled="_mutating"
+                                   ValueChanged="AssignAsync">
+                            <MudSelectItem T="Guid?" Value="@((Guid?)null)">
+                                @MemberLookup.UnassignedLabel
+                            </MudSelectItem>
+                            @foreach (var member in Members)
+                            {
+                                <MudSelectItem T="Guid?" Value="@member.UserId">@member.FullName</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                </MudGrid>
+            }
+            else
+            {
+                @* Read-only mirror for a Viewer, or for any member of an archived project. Same information, no
+                   controls that would only earn a 403. *@
+                <div class="d-flex flex-wrap align-center gap-2 mt-3">
+                    <TaskStatusChip Status="Task.Status" />
+                    <TaskPriorityChip Priority="Task.Priority" />
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                             Icon="@Icons.Material.Outlined.Person">
+                        @_memberLookup.DisplayName(Task.AssigneeId)
+                    </MudChip>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Task.Description))
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3"
+                         Style="white-space:pre-wrap; overflow-wrap:anywhere;">
+                    @Task.Description
+                </MudText>
+            }
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2 d-block">
+                Created @DisplayText.RelativeTime(Task.CreatedAtUtc)
+            </MudText>
+        </div>
+
+        <MudDivider />
+
+        <MudTabs Elevation="0" Color="Color.Primary" ApplyEffectsToContainer="true"
+                 PanelClass="pa-4" Class="ph-task-drawer-tabs">
+            <MudTabPanel Icon="@Icons.Material.Outlined.Comment" Text="@CommentsTabLabel">
+                @* ---------------------------------- COMMENTS ----------------------------------
+                   The composer sits ABOVE the thread on purpose. The drawer is one scroll container, so a composer
+                   pinned under a long thread would scroll out of reach; putting it first keeps "add a comment"
+                   reachable without a sticky footer and the extra CSS that implies. *@
+                @if (CanComment)
+                {
+                    <MudPaper Class="ph-card pa-3 mb-4" Elevation="0">
+                        <MudTextField @bind-Value="_newComment"
+                                      Label="Add a comment"
+                                      Variant="Variant.Outlined"
+                                      Lines="3"
+                                      MaxLength="4000"
+                                      Counter="4000"
+                                      Immediate="true"
+                                      Disabled="_posting" />
+                        <div class="d-flex justify-end mt-2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Send"
+                                       OnClick="PostCommentAsync"
+                                       Disabled="@(_posting || string.IsNullOrWhiteSpace(_newComment))">
+                                @if (_posting)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                }
+                                Comment
+                            </MudButton>
+                        </div>
+                    </MudPaper>
+                }
+
+                @if (_commentsLoading)
+                {
+                    <MudSkeleton Width="100%" Height="64px" Class="mb-2" />
+                    <MudSkeleton Width="100%" Height="64px" Class="mb-2" />
+                }
+                else if (_commentsError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">
+                        @_commentsError
+                    </MudAlert>
+                }
+                else if (_comments.Count == 0)
+                {
+                    <EmptyState Icon="@Icons.Material.Outlined.ChatBubbleOutline"
+                                Title="No comments yet"
+                                Message="@(CanComment ? "Start the discussion." : null)"
+                                IconFontSize="2.5rem" />
+                }
+                else
+                {
+                    <MudStack Spacing="3">
+                        @foreach (var comment in _comments)
+                        {
+                            <MudPaper Class="ph-card pa-3" Elevation="0" @key="comment.Id">
+                                <div class="d-flex align-start gap-3">
+                                    <MudAvatar Color="Color.Primary" Size="Size.Small">
+                                        @_memberLookup.Initial(comment.AuthorId)
+                                    </MudAvatar>
+                                    <div class="flex-grow-1" style="min-width:0;">
+                                        <div class="d-flex align-center flex-wrap gap-2">
+                                            <MudText Typo="Typo.subtitle2" Style="font-weight:600;">
+                                                @_memberLookup.DisplayName(comment.AuthorId)
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                @DisplayText.RelativeTime(comment.CreatedAtUtc)
+                                            </MudText>
+                                            @if (comment.IsEdited)
+                                            {
+                                                <MudTooltip Text="@EditedTooltip(comment)">
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">(edited)</MudText>
+                                                </MudTooltip>
+                                            }
+                                        </div>
+
+                                        @if (_editingCommentId == comment.Id)
+                                        {
+                                            @* Inline edit keeps the thread as the single reading context — a modal
+                                               here would hide the conversation the author is almost certainly
+                                               responding to. *@
+                                            <MudTextField @bind-Value="_editBody"
+                                                          Variant="Variant.Outlined"
+                                                          Lines="3"
+                                                          MaxLength="4000"
+                                                          Counter="4000"
+                                                          Immediate="true"
+                                                          Class="mt-2"
+                                                          Disabled="_savingEdit" />
+                                            <div class="d-flex justify-end gap-2 mt-2">
+                                                <MudButton Size="Size.Small" OnClick="CancelEdit" Disabled="_savingEdit">
+                                                    Cancel
+                                                </MudButton>
+                                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                                           OnClick="SaveEditAsync"
+                                                           Disabled="@(_savingEdit || string.IsNullOrWhiteSpace(_editBody))">
+                                                    @if (_savingEdit)
+                                                    {
+                                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                                    }
+                                                    Save
+                                                </MudButton>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @* white-space:pre-wrap preserves the author's line breaks. The body is
+                                               untrusted user input, so it goes through Blazor's text escaping —
+                                               never MarkupString. *@
+                                            <MudText Typo="Typo.body2" Class="mt-1"
+                                                     Style="white-space:pre-wrap; overflow-wrap:anywhere;">
+                                                @comment.Body
+                                            </MudText>
+                                        }
+                                    </div>
+
+                                    @if (_editingCommentId != comment.Id && comment.AuthorId == _currentUserId)
+                                    {
+                                        @* Only the AUTHOR may edit; the server returns 403 otherwise, so hiding the
+                                           button for everyone else is purely about not offering a doomed action. *@
+                                        <MudTooltip Text="Edit comment">
+                                            <MudIconButton Icon="@Icons.Material.Outlined.Edit"
+                                                           Size="Size.Small"
+                                                           aria-label="Edit comment"
+                                                           OnClick="@(() => BeginEdit(comment))" />
+                                        </MudTooltip>
+                                    }
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+
+                    @if (_moreComments)
+                    {
+                        @* The thread is paged on the server. Rather than silently truncating — which reads as
+                           "that is the whole conversation" — say so and let the reader pull the next page. *@
+                        <div class="d-flex justify-center mt-3">
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Outlined.ExpandMore"
+                                       OnClick="LoadMoreCommentsAsync"
+                                       Disabled="_loadingMoreComments">
+                                @if (_loadingMoreComments)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                }
+                                Load more comments
+                            </MudButton>
+                        </div>
+                    }
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Icon="@Icons.Material.Outlined.AttachFile" Text="@AttachmentsTabLabel">
+                @* --------------------------------- ATTACHMENTS --------------------------------- *@
+                <div class="d-flex align-center justify-space-between gap-2 mb-3">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @if (_uploading && _pendingFile is not null)
+                        {
+                            @($"Uploading \"{_pendingFile.Name}\"…")
+                        }
+                        else
+                        {
+                            @($"Up to {DisplayText.FileSize(MaxUploadBytes)} per file.")
+                        }
+                    </MudText>
+
+                    @if (CanComment)
+                    {
+                        @* Files is passed one-way and reset to null after each upload so the picker forgets the
+                           previous selection and the SAME file can be chosen again. Deliberately not @bind-Files:
+                           that generates its own FilesChanged, which would collide with this handler. *@
+                        <MudFileUpload T="IBrowserFile"
+                                       Files="_pendingFile"
+                                       FilesChanged="UploadFileAsync"
+                                       MaximumFileCount="1"
+                                       Disabled="_uploading">
+                            <ActivatorContent>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                           StartIcon="@Icons.Material.Filled.CloudUpload"
+                                           Disabled="_uploading">
+                                    @if (_uploading)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    }
+                                    Upload
+                                </MudButton>
+                            </ActivatorContent>
+                        </MudFileUpload>
+                    }
+                </div>
+
+                @if (_attachmentsLoading)
+                {
+                    <MudSkeleton Width="100%" Height="56px" Class="mb-2" />
+                    <MudSkeleton Width="100%" Height="56px" Class="mb-2" />
+                }
+                else if (_attachmentsError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">
+                        @_attachmentsError
+                    </MudAlert>
+                }
+                else if (_attachments.Count == 0)
+                {
+                    <EmptyState Icon="@Icons.Material.Outlined.CloudUpload"
+                                Title="No files attached"
+                                Message="@(CanComment ? "Upload a file to share it with the team." : null)"
+                                IconFontSize="2.5rem" />
+                }
+                else
+                {
+                    <MudStack Spacing="2">
+                        @foreach (var attachment in _attachments)
+                        {
+                            <MudPaper Class="ph-card pa-3" Elevation="0" @key="attachment.Id">
+                                <div class="d-flex align-center gap-3">
+                                    <MudIcon Icon="@FileIcon(attachment.ContentType)" Color="Color.Primary" />
+                                    <div class="flex-grow-1" style="min-width:0;">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600; overflow-wrap:anywhere;">
+                                            @attachment.FileName
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @DisplayText.FileSize(attachment.SizeInBytes) ·
+                                            @_memberLookup.DisplayName(attachment.UploadedBy) ·
+                                            @DisplayText.RelativeTime(attachment.UploadedAtUtc)
+                                        </MudText>
+                                    </div>
+
+                                    <MudTooltip Text="Download">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Download"
+                                                       Size="Size.Small"
+                                                       aria-label="@($"Download {attachment.FileName}")"
+                                                       OnClick="@(() => DownloadAsync(attachment))"
+                                                       Disabled="@(_busyAttachmentId == attachment.Id)" />
+                                    </MudTooltip>
+
+                                    @if (CanDelete(attachment))
+                                    {
+                                        @* Server rule: the uploader, or a Maintainer/Owner of the project. Mirroring
+                                           it here avoids offering a doomed 403; the server stays the authority. *@
+                                        <MudTooltip Text="Delete">
+                                            <MudIconButton Icon="@Icons.Material.Outlined.Delete"
+                                                           Color="Color.Error"
+                                                           Size="Size.Small"
+                                                           aria-label="@($"Delete {attachment.FileName}")"
+                                                           OnClick="@(() => DeleteAsync(attachment))"
+                                                           Disabled="@(_busyAttachmentId == attachment.Id)" />
+                                        </MudTooltip>
+                                    }
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudDrawer>
+
+@code {
+    /// <summary>The task whose fields, thread and files this panel shows. Null renders a placeholder.</summary>
+    [Parameter]
+    public TaskItem? Task { get; set; }
+
+    /// <summary>
+    /// The project's members. Used to populate the assignee dropdown and to turn the ids the API returns (author,
+    /// uploader, assignee) into names. Passed down rather than fetched because the parent page has already paid
+    /// for the roster; refetching per comment would be an N+1.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<MemberItem> Members { get; set; } = Array.Empty<MemberItem>();
+
+    [Parameter]
+    public bool Open { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OpenChanged { get; set; }
+
+    /// <summary>
+    /// Raised after a mutation the PARENT needs to know about (status, priority, assignee). The board re-lists
+    /// because its columns are derived from status; the task list re-lists to pick up the new values. Comment and
+    /// attachment changes deliberately do NOT raise it — they are local to this panel and re-listing the parent
+    /// for them would be wasted work.
+    /// </summary>
+    [Parameter]
+    public EventCallback TaskChanged { get; set; }
+
+    // Mirrors UploadAttachmentValidator/FileMetadata on the server (25 MB). Duplicated deliberately: the client can
+    // reject an oversized file before spending the upload, while the server stays the real gate.
+    private const long MaxUploadBytes = 25 * 1024 * 1024;
+
+    // Server-side page size for the thread. Kept equal to what we request so "did we get a full page?" remains a
+    // reliable signal that more comments exist.
+    private const int CommentPageSize = 25;
+
+    private List<CommentItem> _comments = new();
+    private bool _commentsLoading;
+    private string? _commentsError;
+    private bool _moreComments;
+    private bool _loadingMoreComments;
+    private int _commentPagesLoaded;
+
+    private string _newComment = string.Empty;
+    private bool _posting;
+
+    private Guid? _editingCommentId;
+    private string _editBody = string.Empty;
+    private bool _savingEdit;
+
+    private List<AttachmentItem> _attachments = new();
+    private bool _attachmentsLoading;
+    private string? _attachmentsError;
+    private IBrowserFile? _pendingFile;
+    private bool _uploading;
+    private Guid? _busyAttachmentId;
+
+    private bool _mutating;
+
+    private Guid? _currentUserId;
+    private MemberLookup _memberLookup = MemberLookup.Empty;
+
+    // Tracks which task's data is loaded. The parent REUSES this component and swaps the Task parameter, so
+    // without this the panel would keep showing the previously opened task's thread.
+    private Guid? _loadedTaskId;
+
+    /// <summary>
+    /// Whether to offer the field editors. Contributor and above, matching the server's rule for mutating a task.
+    /// </summary>
+    private bool CanEdit => _memberLookup.CanContribute(_currentUserId);
+
+    /// <summary>
+    /// Whether to offer commenting and uploading. Same Contributor threshold as editing — the API applies it to
+    /// AddComment and UploadAttachment too — but named separately because they are different capabilities that
+    /// could diverge.
+    /// </summary>
+    private bool CanComment => _memberLookup.CanContribute(_currentUserId);
+
+    private string CommentsTabLabel =>
+        _comments.Count == 0 ? "Comments" : $"Comments ({_comments.Count}{(_moreComments ? "+" : string.Empty)})";
+
+    private string AttachmentsTabLabel =>
+        _attachments.Count == 0 ? "Files" : $"Files ({_attachments.Count})";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The "can I edit this / delete that" decisions need the caller's own id, which is already in the JWT we
+        // hold — so we read it from the auth state rather than adding a /me round-trip.
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+
+        if (Guid.TryParse(state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+        {
+            _currentUserId = userId;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Rebuilt on every parameter set because the roster can arrive AFTER the drawer first renders (the parent
+        // loads it concurrently with the tasks), and the permission checks below depend on it.
+        _memberLookup = MemberLookup.From(Members);
+
+        if (!Open || Task is null)
+        {
+            return;
+        }
+
+        if (_loadedTaskId == Task.Id)
+        {
+            return;
+        }
+
+        _loadedTaskId = Task.Id;
+        ResetPanelState();
+        await LoadAsync(Task.Id);
+    }
+
+    /// <summary>
+    /// Clears every per-task piece of state. Called on each task switch so a draft comment, an open inline editor,
+    /// or a stale error from the previous task cannot bleed into the next one.
+    /// </summary>
+    private void ResetPanelState()
+    {
+        _comments = new();
+        _attachments = new();
+        _commentsError = null;
+        _attachmentsError = null;
+        _newComment = string.Empty;
+        _editingCommentId = null;
+        _editBody = string.Empty;
+        _pendingFile = null;
+        _busyAttachmentId = null;
+        _moreComments = false;
+        _commentPagesLoaded = 0;
+    }
+
+    private async Task LoadAsync(Guid taskId)
+    {
+        _commentsLoading = true;
+        _attachmentsLoading = true;
+
+        // Two independent reads, issued together. Awaiting them in sequence would double the time before the panel
+        // is usable, and neither depends on the other.
+        //
+        // WhenAll is fully qualified because this component's `Task` PARAMETER (a TaskItem) shadows the
+        // System.Threading.Tasks.Task type inside every member here — an unavoidable consequence of the parameter
+        // being named for the domain concept it carries.
+        var commentsTask = LoadCommentsAsync(taskId, page: 1, append: false);
+        var attachmentsTask = LoadAttachmentsAsync(taskId);
+
+        await System.Threading.Tasks.Task.WhenAll(commentsTask, attachmentsTask);
+
+        _commentsLoading = false;
+        _attachmentsLoading = false;
+    }
+
+    private async Task LoadCommentsAsync(Guid taskId, int page, bool append)
+    {
+        var result = await CommentsApi.ListAsync(taskId, pageNumber: page, pageSize: CommentPageSize);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _commentsError = result.Error ?? "Failed to load comments.";
+            return;
+        }
+
+        _commentsError = null;
+
+        // The API pages the thread oldest-first from page 1, so a later page holds NEWER comments. Appending
+        // therefore preserves chronological order without a re-sort.
+        if (append)
+        {
+            _comments.AddRange(result.Value.Items);
+        }
+        else
+        {
+            _comments = result.Value.Items;
+        }
+
+        _commentPagesLoaded = page;
+        _moreComments = result.Value.HasNextPage;
+    }
+
+    private async Task LoadMoreCommentsAsync()
+    {
+        if (Task is null || _loadingMoreComments)
+        {
+            return;
+        }
+
+        _loadingMoreComments = true;
+        await LoadCommentsAsync(Task.Id, _commentPagesLoaded + 1, append: true);
+        _loadingMoreComments = false;
+    }
+
+    private async Task LoadAttachmentsAsync(Guid taskId)
+    {
+        var result = await AttachmentsApi.ListAsync(taskId);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _attachmentsError = result.Error ?? "Failed to load attachments.";
+            return;
+        }
+
+        _attachmentsError = null;
+        _attachments = result.Value;
+    }
+
+    // ---------------------------------------------------------------------------------------------------
+    // FIELD MUTATIONS
+    //
+    // Each applies the change locally FIRST so the select reflects the user's choice immediately, then reverts on
+    // failure. Every one notifies the parent, because status/priority/assignee are all rendered outside this panel
+    // (the board's columns, the list's rows) and would otherwise show stale values.
+    // ---------------------------------------------------------------------------------------------------
+
+    private async Task ChangeStatusAsync(ProjectTaskStatus status)
+    {
+        if (Task is null || Task.Status == status)
+        {
+            // Selecting the current value is a no-op the API answers with 409 ("already in that status"), so
+            // forwarding it would show an error for a change the user did not make.
+            return;
+        }
+
+        var previous = Task.Status;
+        Task.Status = status;
+
+        await MutateAsync(
+            () => TasksApi.ChangeStatusAsync(Task.Id, status),
+            onFailure: () => Task.Status = previous,
+            successMessage: $"Status set to {DisplayText.Humanize(status)}.");
+    }
+
+    private async Task ChangePriorityAsync(TaskPriority priority)
+    {
+        if (Task is null || Task.Priority == priority)
+        {
+            return;
+        }
+
+        var previous = Task.Priority;
+        Task.Priority = priority;
+
+        await MutateAsync(
+            () => TasksApi.UpdatePriorityAsync(Task.Id, priority),
+            onFailure: () => Task.Priority = previous,
+            successMessage: $"Priority set to {DisplayText.Humanize(priority)}.");
+    }
+
+    private async Task AssignAsync(Guid? assigneeId)
+    {
+        if (Task is null || Task.AssigneeId == assigneeId)
+        {
+            return;
+        }
+
+        if (assigneeId is null)
+        {
+            // The API has no unassign endpoint — AssignTaskCommand requires a user id. Saying so is better than
+            // silently ignoring the selection, which would leave the dropdown showing "Unassigned" while the task
+            // is still assigned. Re-notifying the parent restores the true value in the UI.
+            Snackbar.Add(
+                "A task cannot be unassigned. Assign it to another member instead.",
+                Severity.Info);
+            await TaskChanged.InvokeAsync();
+            return;
+        }
+
+        var previous = Task.AssigneeId;
+        Task.AssigneeId = assigneeId;
+
+        await MutateAsync(
+            () => TasksApi.AssignAsync(Task.Id, assigneeId.Value),
+            onFailure: () => Task.AssigneeId = previous,
+            successMessage: $"Assigned to {_memberLookup.DisplayName(assigneeId)}.");
+    }
+
+    /// <summary>
+    /// Runs one optimistic field mutation: call the API, revert on failure, toast either way, and tell the parent.
+    /// </summary>
+    /// <remarks>
+    /// The three editors above differ only in which field they touch and how they undo it. Factoring the shared
+    /// shape here means the busy flag, the revert, the snackbar and the parent notification are written once — the
+    /// alternative is three near-identical blocks where the third quietly forgets to reset <c>_mutating</c> in a
+    /// failure path and leaves the panel disabled.
+    /// </remarks>
+    private async Task MutateAsync(
+        Func<Task<ApiResult>> operation,
+        Action onFailure,
+        string successMessage)
+    {
+        _mutating = true;
+
+        try
+        {
+            var result = await operation();
+
+            if (!result.IsSuccess)
+            {
+                onFailure();
+                Snackbar.Add(result.Error ?? "The change could not be saved.", Severity.Error);
+                return;
+            }
+
+            Snackbar.Add(successMessage, Severity.Success);
+        }
+        finally
+        {
+            // In a finally block so a thrown exception cannot leave every editor permanently disabled.
+            _mutating = false;
+        }
+
+        // Outside the try: the parent should only be refreshed once the mutation has actually settled, and a
+        // failure has already been reverted locally so there is nothing new for it to learn.
+        await TaskChanged.InvokeAsync();
+    }
+
+    // ---------------------------------------------------------------------------------------------------
+    // COMMENTS
+    // ---------------------------------------------------------------------------------------------------
+
+    private async Task PostCommentAsync()
+    {
+        if (Task is null || string.IsNullOrWhiteSpace(_newComment))
+        {
+            return;
+        }
+
+        var taskId = Task.Id;
+        var body = _newComment.Trim();
+
+        _posting = true;
+        var result = await CommentsApi.AddAsync(taskId, body);
+        _posting = false;
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            Snackbar.Add(result.Error ?? "Failed to post the comment.", Severity.Error);
+            return;
+        }
+
+        // The API echoes the new comment's id and server-stamped time, which is everything the thread needs to
+        // render it. Appending locally keeps the just-typed comment on screen even if it would fall on a later
+        // server page, and avoids a round-trip on the common path.
+        _comments.Add(new CommentItem
+        {
+            Id = result.Value.Id,
+            TaskId = taskId,
+            AuthorId = _currentUserId ?? Guid.Empty,
+            Body = body,
+            IsEdited = false,
+            CreatedAtUtc = result.Value.CreatedAtUtc
+        });
+
+        _newComment = string.Empty;
+        Snackbar.Add("Comment posted.", Severity.Success);
+    }
+
+    private void BeginEdit(CommentItem comment)
+    {
+        _editingCommentId = comment.Id;
+        _editBody = comment.Body;
+    }
+
+    private void CancelEdit()
+    {
+        _editingCommentId = null;
+        _editBody = string.Empty;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingCommentId is null || string.IsNullOrWhiteSpace(_editBody))
+        {
+            return;
+        }
+
+        var commentId = _editingCommentId.Value;
+        var body = _editBody.Trim();
+
+        _savingEdit = true;
+        var result = await CommentsApi.EditAsync(commentId, body);
+        _savingEdit = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to edit the comment.", Severity.Error);
+            return;
+        }
+
+        // Edit returns 204, so we apply the change we know succeeded rather than re-listing the whole thread.
+        var existing = _comments.FirstOrDefault(c => c.Id == commentId);
+
+        if (existing is not null)
+        {
+            existing.Body = body;
+            existing.IsEdited = true;
+            existing.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        CancelEdit();
+        Snackbar.Add("Comment updated.", Severity.Success);
+    }
+
+    // ---------------------------------------------------------------------------------------------------
+    // ATTACHMENTS
+    // ---------------------------------------------------------------------------------------------------
+
+    private async Task UploadFileAsync(IBrowserFile? file)
+    {
+        if (Task is null || file is null)
+        {
+            return;
+        }
+
+        var taskId = Task.Id;
+
+        // Held while the upload runs so the panel can name the file in progress. Cleared in the finally block,
+        // which also resets the picker so the same file can be selected again.
+        _pendingFile = file;
+
+        // Reject oversize locally so the user finds out immediately instead of after streaming the whole file to a
+        // server that will refuse it.
+        if (file.Size > MaxUploadBytes)
+        {
+            Snackbar.Add(
+                $"\"{file.Name}\" is {DisplayText.FileSize(file.Size)}. The limit is {DisplayText.FileSize(MaxUploadBytes)}.",
+                Severity.Warning);
+            _pendingFile = null;
+            return;
+        }
+
+        _uploading = true;
+
+        try
+        {
+            // OpenReadStream defaults to a 500 KB ceiling and THROWS above it, so the server-side cap must be
+            // passed explicitly — otherwise every file over 500 KB fails here, long before the API sees it.
+            await using var stream = file.OpenReadStream(MaxUploadBytes);
+            var result = await AttachmentsApi.UploadAsync(taskId, stream, file.Name, file.ContentType);
+
+            if (!result.IsSuccess || result.Value is null)
+            {
+                Snackbar.Add(result.Error ?? "Failed to upload the file.", Severity.Error);
+                return;
+            }
+
+            // Insert at the front to match the server's newest-first ordering.
+            _attachments.Insert(0, new AttachmentItem
+            {
+                Id = result.Value.Id,
+                FileName = result.Value.FileName,
+                ContentType = string.IsNullOrWhiteSpace(file.ContentType)
+                    ? "application/octet-stream"
+                    : file.ContentType,
+                SizeInBytes = file.Size,
+                UploadedBy = _currentUserId ?? Guid.Empty,
+                UploadedAtUtc = result.Value.UploadedAtUtc
+            });
+
+            Snackbar.Add($"\"{result.Value.FileName}\" uploaded.", Severity.Success);
+        }
+        catch (IOException ex)
+        {
+            // Thrown when the browser stream exceeds the declared ceiling mid-read (a lying Content-Length, or a
+            // file changed on disk after selection). Surface it instead of tearing down the circuit.
+            Snackbar.Add($"Upload failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _uploading = false;
+            _pendingFile = null;
+        }
+    }
+
+    private async Task DownloadAsync(AttachmentItem attachment)
+    {
+        _busyAttachmentId = attachment.Id;
+        var result = await AttachmentsApi.DownloadAsync(attachment.Id);
+        _busyAttachmentId = null;
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            Snackbar.Add(result.Error ?? "Failed to download the file.", Severity.Error);
+            return;
+        }
+
+        // In Interactive Server the bytes are fetched server-side (with the Bearer token attached) and then handed
+        // to a small JS helper that turns them into a Blob download. This is why we never expose the raw API URL to
+        // the browser: doing so would need either an unauthenticated link or a token in the query string.
+        await JS.InvokeVoidAsync(
+            "projectHubDownload.saveAs",
+            result.Value.FileName,
+            result.Value.ContentType,
+            Convert.ToBase64String(result.Value.Content));
+    }
+
+    private async Task DeleteAsync(AttachmentItem attachment)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Delete file",
+            $"Delete \"{attachment.FileName}\"? This removes the file permanently and cannot be undone.",
+            yesText: "Delete", cancelText: "Cancel");
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        _busyAttachmentId = attachment.Id;
+        var result = await AttachmentsApi.DeleteAsync(attachment.Id);
+        _busyAttachmentId = null;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to delete the file.", Severity.Error);
+            return;
+        }
+
+        _attachments.RemoveAll(a => a.Id == attachment.Id);
+        Snackbar.Add("File deleted.", Severity.Success);
+    }
+
+    // ---------------------------------------------------------------------------------------------------
+    // OPEN/CLOSE AND SMALL HELPERS
+    // ---------------------------------------------------------------------------------------------------
+
+    private async Task HandleOpenChangedAsync(bool open)
+    {
+        // MudBlazor raises this for the overlay click, Esc, and its own navigation-close. Resetting _loadedTaskId
+        // on close means REOPENING the same task refetches rather than showing a stale thread.
+        if (!open)
+        {
+            _loadedTaskId = null;
+        }
+
+        Open = open;
+        await OpenChanged.InvokeAsync(open);
+    }
+
+    private Task CloseAsync() => HandleOpenChangedAsync(false);
+
+    private static string EditedTooltip(CommentItem comment) =>
+        comment.UpdatedAtUtc is null
+            ? "Edited"
+            : $"Edited {comment.UpdatedAtUtc.Value.ToLocalTime():g}";
+
+    /// <summary>
+    /// Mirrors the server's delete rule: the uploader, or a Maintainer/Owner of this project. The server re-checks,
+    /// so this only decides whether to OFFER the action.
+    /// </summary>
+    private bool CanDelete(AttachmentItem attachment)
+    {
+        if (_currentUserId is null)
+        {
+            return false;
+        }
+
+        return attachment.UploadedBy == _currentUserId.Value
+            || _memberLookup.CanManage(_currentUserId);
+    }
+
+    /// <summary>Picks a recognisable icon from the content type so the file list scans quickly.</summary>
+    private static string FileIcon(string contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return Icons.Material.Outlined.InsertDriveFile;
+        }
+
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return Icons.Material.Outlined.Image;
+        }
+
+        if (contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+        {
+            return Icons.Material.Outlined.Movie;
+        }
+
+        if (contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+        {
+            return Icons.Material.Outlined.AudioFile;
+        }
+
+        if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
+        {
+            return Icons.Material.Outlined.Description;
+        }
+
+        return contentType.ToLowerInvariant() switch
+        {
+            "application/pdf" => Icons.Material.Outlined.PictureAsPdf,
+            "application/zip" or "application/x-zip-compressed" or "application/gzip"
+                => Icons.Material.Outlined.FolderZip,
+            _ => Icons.Material.Outlined.InsertDriveFile
+        };
+    }
+}

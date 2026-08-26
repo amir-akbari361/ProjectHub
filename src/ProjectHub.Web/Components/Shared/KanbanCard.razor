@@ -1,0 +1,96 @@
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Models
+@using ProjectHub.Web.Client.Theme
+
+@*
+    KANBAN CARD — one task as it appears in a board column.
+
+    Deliberately terse. A board is scanned, not read: the eye needs the title, who owns it, and how urgent it is,
+    and every extra line reduces how many cards fit in a column. Status is absent because the COLUMN already says
+    it — repeating it on the card would be redundant ink.
+
+    It renders no dropdowns. A card is a drag handle: an interactive control inside one competes with the drag
+    gesture (the pointer-down that opens a select is the same pointer-down that starts a drag), which is why the
+    editors live in the drawer this card opens rather than on the card itself.
+*@
+
+<MudPaper Class="ph-kanban-card pa-3" Elevation="0"
+          role="button"
+          tabindex="0"
+          aria-label="@($"Open task {Task.Title}")"
+          @onclick="OnOpen"
+          @onkeydown="OnKeyDown">
+    <div class="d-flex align-start gap-2">
+        <div class="ph-accent-bar" style="@($"background-color:{ProjectHubTheme.PriorityColor(Task.Priority)};")"></div>
+
+        <div class="flex-grow-1" style="min-width:0;">
+            @* Clamped to two lines: a long title must not turn one card into half a column, but truncating to a
+               single line hides too much of a real task name to be useful. *@
+            <MudText Typo="Typo.body2" Class="ph-kanban-card-title">@Task.Title</MudText>
+
+            <div class="d-flex align-center justify-space-between mt-2 gap-2">
+                <div class="d-flex align-center gap-1" style="min-width:0;">
+                    @if (Task.AssigneeId is { } assigneeId && assigneeId != Guid.Empty)
+                    {
+                        <MudTooltip Text="@Members.DisplayName(assigneeId)">
+                            <MudAvatar Color="Color.Primary" Size="Size.Small"
+                                       Style="width:22px;height:22px;font-size:.7rem;">
+                                @Members.Initial(assigneeId)
+                            </MudAvatar>
+                        </MudTooltip>
+                    }
+                    else
+                    {
+                        <MudTooltip Text="Unassigned">
+                            <MudIcon Icon="@Icons.Material.Outlined.PersonOutline"
+                                     Size="Size.Small" Color="Color.Secondary" />
+                        </MudTooltip>
+                    }
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary"
+                             Style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                        @Members.DisplayName(Task.AssigneeId)
+                    </MudText>
+                </div>
+
+                @* Only High and Critical get a chip. Every card carrying one would make the signal worthless —
+                   the accent bar already encodes priority for the other levels, and "Medium" on most cards is
+                   noise rather than information. *@
+                @if (Task.Priority >= TaskPriority.High)
+                {
+                    <TaskPriorityChip Priority="Task.Priority" />
+                }
+            </div>
+        </div>
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public TaskItem Task { get; set; } = null!;
+
+    /// <summary>
+    /// The project's roster, pre-indexed, so the card can name its assignee without its own request. Passed down
+    /// rather than injected because the board has already paid for the roster once.
+    /// </summary>
+    [Parameter]
+    public MemberLookup Members { get; set; } = MemberLookup.Empty;
+
+    /// <summary>Raised when the card is activated. The board opens the task drawer.</summary>
+    [Parameter]
+    public EventCallback<TaskItem> OnOpenRequested { get; set; }
+
+    private Task OnOpen() => OnOpenRequested.InvokeAsync(Task);
+
+    // role="button" and tabindex put the card in the tab order; this gives it the Enter/Space activation that a
+    // real <button> would have had for free. Dragging remains mouse/touch-only, which is why the drawer (reachable
+    // from here) is where a keyboard user changes status.
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            await OnOpen();
+        }
+    }
+}

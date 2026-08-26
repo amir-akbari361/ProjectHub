@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ProjectHub.Domain.Entities;
-using ProjectHub.Domain.ValueObjects;
 using ProjectHub.Persistence.Constants;
 
 namespace ProjectHub.Persistence.Configurations;
@@ -20,11 +19,17 @@ internal sealed class ProjectTaskConfiguration : EntityConfiguration<ProjectTask
         builder.Property(task => task.ProjectId)
             .IsRequired();
 
-        builder.Property(task => task.Title)
-            .HasConversion(title => title.Value, value => TaskTitle.Create(value))
-            .HasColumnName("title")
-            .HasMaxLength(500)
-            .IsRequired();
+        // Mapped as a COMPLEX PROPERTY rather than through a value converter so `task.Title.Value` is a real
+        // mapped column and therefore translatable in LIKE and ORDER BY. See ProjectConfiguration for the full
+        // rationale — the same converter mapping here was breaking task search and sort-by-title with a 500.
+        // Column name, length and nullability are unchanged, so the schema needs no migration.
+        builder.ComplexProperty(task => task.Title, title =>
+        {
+            title.Property(taskTitle => taskTitle.Value)
+                .HasColumnName("title")
+                .HasMaxLength(500)
+                .IsRequired();
+        });
 
         builder.Property(task => task.Description)
             .HasMaxLength(4000);

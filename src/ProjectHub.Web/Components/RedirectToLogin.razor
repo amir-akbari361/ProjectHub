@@ -1,41 +1,57 @@
-@* WHY THIS COMPONENT EXISTS
-   ------------------------
-   When <AuthorizeRouteView> decides the user is NOT authorized, it renders whatever we put in its
-   <NotAuthorized> slot. The naive approach — calling Navigation.NavigateTo(...) inline inside that
-   slot — throws "Cannot provide a value for property 'AuthenticationService' ... no registered service
-   of type 'Microsoft.AspNetCore.Components.Authorization.IAuthenticationService'". That service belongs
-   to the server-rendered Identity/cookie auth stack (AddAuthentication()/AddAuthenticationStateSerialization),
-   which we intentionally do NOT use: our Web app is a pure client of the API and derives identity by
-   decoding the JWT in TokenStore. So we must perform the redirect ourselves, and we must do it AFTER the
-   component has rendered — never during the synchronous render pass — otherwise Blazor treats a mid-render
-   navigation as a framework-driven auth challenge and reaches for that missing service.
-
-   Doing the navigation in OnAfterRender (a) runs on the client circuit where NavigationManager is fully
-   available, and (b) happens outside the render tree so it never trips the AuthenticationService lookup.
-   We also capture the current URL as returnUrl so the login page can send the user back where they aimed. *@
 @inject NavigationManager Navigation
 
-<MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-2" />
-<MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
-    Redirecting to sign in…
-</MudText>
+@*
+    Sends an unauthenticated visitor to /login, preserving where they were headed.
+
+    WHY A COMPONENT INSTEAD OF NAVIGATING INLINE IN Routes.razor
+    Calling Navigation.NavigateTo(...) inside the <NotAuthorized> markup executes during the RENDER pass, which
+    Blazor interprets as a framework-driven auth challenge. That in turn resolves IAuthenticationService — part of
+    the server-side Identity/cookie stack this app deliberately does not use, since our identity is a JWT decoded
+    from localStorage — and throws "Cannot provide a value for property 'AuthenticationService'". Navigating from
+    OnAfterRender instead runs the redirect OUTSIDE the render tree, where NavigationManager is fully available and
+    nothing mistakes it for a challenge.
+
+    WHEN THIS RUNS
+    <AuthenticationGate> guarantees the stored token has already been read before the router evaluates any
+    [Authorize], so reaching this component means the visitor is genuinely signed out — not merely "not yet
+    known". That is what makes an unconditional redirect correct here; before the gate existed, this component
+    also fired during the pre-interop window and bounced users who had a perfectly valid session.
+*@
+
+<div class="d-flex flex-column align-center justify-center pa-8">
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-4">
+        Redirecting to sign in…
+    </MudText>
+</div>
 
 @code {
     protected override void OnAfterRender(bool firstRender)
     {
-        // Only redirect once, on the first render, to avoid a navigation loop if the component
-        // re-renders while the browser is still processing the previous NavigateTo.
+        // Only redirect once. Re-firing on a later render would stack navigations while the browser is still
+        // processing the first, which shows up as a login page that immediately re-navigates to itself.
         if (!firstRender)
         {
             return;
         }
 
-        // Build a relative return URL from the page the user was denied, so /login can bounce them back.
         var target = Navigation.ToBaseRelativePath(Navigation.Uri);
+
+        // Root ("") has nothing worth returning to, and passing returnUrl=/ would just add noise to the URL the
+        // user sees. Anything else is captured so /login can put them where they were actually going.
+        if (string.IsNullOrEmpty(target) || target.StartsWith("login", StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        // Escaped because the path can carry its own query string, whose '&' and '=' would otherwise be parsed as
+        // part of the LOGIN url's parameters rather than as the value of returnUrl.
         var returnUrl = Uri.EscapeDataString("/" + target);
 
-        // forceLoad:false keeps this as a client-side (SignalR) navigation — no full page reload,
-        // which preserves the in-memory TokenStore state across the hop to /login.
+        // forceLoad defaults to false, keeping this a client-side navigation over the existing circuit. A full
+        // reload would tear down the circuit and, with it, the in-memory TokenStore — pointless work on the hop to
+        // a page whose whole job is to populate it.
         Navigation.NavigateTo($"login?returnUrl={returnUrl}");
     }
 }

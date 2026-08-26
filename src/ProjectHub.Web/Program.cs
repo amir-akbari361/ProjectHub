@@ -5,130 +5,191 @@ using Microsoft.Extensions.Options;
 using MudBlazor.Services;
 using ProjectHub.Web.Client.Auth;
 using ProjectHub.Web.Client.Http;
+using ProjectHub.Web.Client.State;
+using ProjectHub.Web.Client.Theme;
 using ProjectHub.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Blazor Web App with the Interactive Server render mode: components run on the server over a
-// SignalR circuit, so no application code ships to the browser (safer, smaller download).
+// Blazor Web App with the Interactive Server render mode: components run on the server over a SignalR
+// circuit, so no application code ships to the browser (safer, and a smaller download).
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Registers MudBlazor's services: the dialog/snackbar managers, the popover/theme providers, and
-// the JS interop bridge. Without this call the <Mud*> components have no backing services and throw.
+// Registers MudBlazor's services: the dialog/snackbar managers, the popover/theme providers, and the JS
+// interop bridge. Without this call the <Mud*> components have no backing services and throw.
 builder.Services.AddMudServices();
 
-// API base URL from configuration. All typed HTTP clients below will share this base address.
+// API base URL from configuration. Every typed client below shares it.
 var apiBaseUrl = builder.Configuration["ApiBaseUrl"]
     ?? throw new InvalidOperationException(
         "'ApiBaseUrl' is not configured. Set it in appsettings so the Web host knows where the API lives.");
 
-// Typed HTTP clients for each API feature slice. Each gets its own HttpClient instance (from the pool)
-// with the shared base address. Components inject these directly rather than using IHttpClientFactory,
-// which keeps the API surface clean and the dependency graph obvious.
+// -------------------------------------------------------------------------------------------------
+// CIRCUIT ↔ HTTP HANDLER BRIDGE
 //
-// Bridges the circuit's DI scope to the HttpClient handler pipeline. See CircuitServicesAccessor for
-// the full rationale, but in short: IHttpClientFactory builds handlers in its OWN scope, so the handler
-// can't inject the circuit's TokenStore directly. The accessor (populated per inbound activity by the
-// circuit handler below) lets BearerTokenHandler reach the circuit-scoped TokenStore at send-time.
-//
-// - CircuitServicesAccessor is SCOPED so each circuit gets its own instance, but its backing store is a
-//   static AsyncLocal, so the value flows into the factory-scoped handler on the same async path.
-// - The CircuitHandler is registered against the framework's CircuitHandler contract; Blazor discovers
-//   and runs every registered CircuitHandler for each circuit.
+// IHttpClientFactory builds handler chains in its OWN pooled DI scope, NOT the Blazor circuit's. A handler
+// that injected the circuit's TokenStore directly would therefore get a DIFFERENT instance, with a
+// disconnected IJSRuntime that cannot read localStorage — the cause of "401 on every call while the UI looks
+// signed in". CircuitServicesAccessor publishes the circuit's service provider on an AsyncLocal, so
+// BearerTokenHandler can resolve the RIGHT services at send-time. See those two types for the full rationale.
+// -------------------------------------------------------------------------------------------------
 builder.Services.AddScoped<CircuitServicesAccessor>();
 builder.Services.AddScoped<CircuitHandler, ServicesAccessorCircuitHandler>();
 
-// WHY REGISTER BearerTokenHandler AS SCOPED?
-// The handler now depends on CircuitServicesAccessor (scoped). Keeping the handler scoped keeps lifetimes
-// aligned and lets each typed client get its own handler instance per circuit. The handler resolves the
-// circuit-scoped TokenStore lazily at send-time via the accessor, so the token stays strictly per-user.
+// Scoped so each circuit gets its own handler instance and lifetimes stay aligned with the accessor it depends
+// on. The handler resolves the token provider lazily at send-time, so tokens stay strictly per-user.
 builder.Services.AddScoped<BearerTokenHandler>();
 
-// AuthApiClient handles login/register/forgot, which are anonymous endpoints — no Bearer token needed.
-// It goes directly to the API without the handler.
-builder.Services.AddHttpClient<AuthApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl));
+// -------------------------------------------------------------------------------------------------
+// TYPED HTTP CLIENTS — one per API feature slice.
+//
+// AuthApiClient is registered WITHOUT the bearer handler for two reasons: its endpoints are anonymous, and its
+// RefreshAsync is what the handler CALLS when a token has expired — routing it back through the handler would
+// be an infinite cycle (refresh → handler → needs a token → refresh).
+//
+// Every other client goes through BearerTokenHandler, which attaches (and silently renews) the access token.
+// The local helper exists so adding a client is one line and cannot accidentally omit authentication — the
+// failure mode of the previous copy-pasted block, where a new client's missing .AddHttpMessageHandler would
+// present as sporadic 401s rather than a compile error.
+// -------------------------------------------------------------------------------------------------
+builder.Services.AddHttpClient<AuthApiClient>(ConfigureApiClient);
 
-// All other typed clients call authenticated endpoints. Each is wired through BearerTokenHandler so
-// every request automatically carries the current user's JWT as Authorization: Bearer <token>.
-builder.Services.AddHttpClient<ProjectsApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
-    .AddHttpMessageHandler<BearerTokenHandler>();
-builder.Services.AddHttpClient<TasksApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
-    .AddHttpMessageHandler<BearerTokenHandler>();
-builder.Services.AddHttpClient<MembersApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
-    .AddHttpMessageHandler<BearerTokenHandler>();
-builder.Services.AddHttpClient<CommentsApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
-    .AddHttpMessageHandler<BearerTokenHandler>();
-builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
-    .AddHttpMessageHandler<BearerTokenHandler>();
-builder.Services.AddHttpClient<SearchApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
-    .AddHttpMessageHandler<BearerTokenHandler>();
-builder.Services.AddHttpClient<AttachmentsApiClient>(client => client.BaseAddress = new Uri(apiBaseUrl))
-    .AddHttpMessageHandler<BearerTokenHandler>();
+AddAuthenticatedApiClient<ProjectsApiClient>();
+AddAuthenticatedApiClient<TasksApiClient>();
+AddAuthenticatedApiClient<MembersApiClient>();
+AddAuthenticatedApiClient<CommentsApiClient>();
+AddAuthenticatedApiClient<AttachmentsApiClient>();
+AddAuthenticatedApiClient<NotificationsApiClient>();
+AddAuthenticatedApiClient<SearchApiClient>();
+AddAuthenticatedApiClient<AuditLogsApiClient>();
 
-// Authentication state: TokenStore holds the JWT/refresh tokens in memory, and the custom
-// AuthenticationStateProvider reads them to determine the current user. Registered as scoped so
-// each SignalR circuit gets its own isolated auth state.
+// -------------------------------------------------------------------------------------------------
+// AUTHENTICATION STATE
+//
+// TokenStore persists the token pair in localStorage; AccessTokenProvider decides whether the access half is
+// still usable and performs the silent refresh; JwtAuthenticationStateProvider turns the stored token into the
+// ClaimsPrincipal that <AuthorizeView> and the router read. All scoped, so each circuit is isolated.
+// -------------------------------------------------------------------------------------------------
 builder.Services.AddScoped<TokenStore>();
+builder.Services.AddScoped<AccessTokenProvider>();
 builder.Services.AddScoped<JwtAuthenticationStateProvider>();
-builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<JwtAuthenticationStateProvider>());
 
-// Blazor's built-in auth services: AuthorizeView, CascadingAuthenticationState, [Authorize] all depend on this.
+// Registered against BOTH its concrete type (above, for the flows that need to push a state change) and the
+// framework's abstraction (below, for everything that just reads state). Resolving the same instance for both is
+// essential: two instances would mean a login notified subscribers of one while components read the other.
+builder.Services.AddScoped<AuthenticationStateProvider>(
+    sp => sp.GetRequiredService<JwtAuthenticationStateProvider>());
+
+// Blazor's built-in authorization services: AuthorizeView, CascadingAuthenticationState and [Authorize] all
+// depend on these.
 builder.Services.AddAuthorizationCore();
 
+// -------------------------------------------------------------------------------------------------
+// UI STATE — cross-component state that cannot live in a single component.
+// -------------------------------------------------------------------------------------------------
+builder.Services.AddScoped<NotificationState>();
+builder.Services.AddScoped<ThemePreferenceStore>();
+
 // WHY REGISTER AUTHENTICATION AT ALL FOR A BEARER-ONLY SPA?
-// The Blazor Web App router runs a framework AUTHORIZATION step for [Authorize] pages. When a user is
-// unauthorized, that step asks the authentication stack to "challenge" — and the challenge machinery
-// resolves IAuthenticationService. If no authentication services are registered, resolving it throws
-// (the exact "Unable to find the required 'IAuthenticationService'" error). We don't use server cookies
-// or Identity — our real identity comes from the JWT decoded client-side by JwtAuthenticationStateProvider —
-// but the pipeline still needs *some* authentication scheme present so the challenge has a handler.
-// Registering an empty default scheme satisfies that requirement without introducing server-side sessions.
-// The <RedirectToLogin> component still owns the actual "send anonymous users to /login" behavior.
+// The Blazor router runs a framework AUTHORIZATION step for [Authorize] pages. When a user is unauthorized that
+// step asks the authentication stack to "challenge", and the challenge machinery resolves IAuthenticationService
+// — which throws if no authentication services are registered ("Unable to find the required
+// 'IAuthenticationService'"). We use neither cookies nor server-side Identity (our identity is the JWT, decoded
+// client-side), but the pipeline still needs SOME scheme present so the challenge has a handler. An empty default
+// scheme satisfies that without introducing server-side sessions; <RedirectToLogin> owns the actual redirect.
 builder.Services
     .AddAuthentication(options =>
     {
-        options.DefaultAuthenticateScheme = "ProjectHub.Web";
-        options.DefaultChallengeScheme = "ProjectHub.Web";
+        options.DefaultAuthenticateScheme = NoOpAuthenticationHandler.SchemeName;
+        options.DefaultChallengeScheme = NoOpAuthenticationHandler.SchemeName;
     })
-    .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>("ProjectHub.Web", _ => { });
+    .AddScheme<AuthenticationSchemeOptions, NoOpAuthenticationHandler>(
+        NoOpAuthenticationHandler.SchemeName, _ => { });
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // HSTS tells browsers to only ever use HTTPS for this host. 30-day default; tune for prod.
+    app.UseExceptionHandler("/error", createScopeForErrors: true);
+    // HSTS tells browsers to only ever reach this host over HTTPS. 30-day default; tune before production.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 
-// WHY BOTH, AND IN THIS ORDER?
-// UseAuthentication populates HttpContext.User from the registered scheme (our no-op leaves it anonymous),
-// and UseAuthorization runs the endpoint's authorization requirements. They must sit AFTER routing/HTTPS
-// and BEFORE the component endpoints are mapped so the challenge machinery has a middleware to run in.
-// Even though real identity is resolved client-side from the JWT, registering these keeps the framework's
-// authorization pipeline complete and prevents the "missing IAuthenticationService" challenge failure.
+// ORDER MATTERS. UseAuthentication populates HttpContext.User from the registered scheme (our no-op leaves it
+// anonymous) and UseAuthorization evaluates the endpoint's requirements. Both must sit AFTER routing/HTTPS and
+// BEFORE the component endpoints are mapped, so the challenge machinery has middleware to run in. Even though
+// real identity is resolved client-side, registering these keeps the framework's pipeline complete and prevents
+// the missing-IAuthenticationService failure described above.
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+// -------------------------------------------------------------------------------------------------
+// WHY .AllowAnonymous() ON THE COMPONENT ENDPOINTS — THIS IS LOAD-BEARING, NOT A LOOSENING
+//
+// MapRazorComponents promotes each page component's [Authorize] attribute into ENDPOINT authorization
+// metadata, so ASP.NET evaluates it in UseAuthorization before the component ever renders. That model assumes
+// server-side identity (cookies/Identity). Ours is a Bearer JWT held in the browser's localStorage, which the
+// server cannot see: HttpContext.User is ALWAYS anonymous here, by design.
+//
+// So every [Authorize] page failed authorization at the HTTP level and issued a challenge. NoOpAuthenticationHandler
+// answers a challenge by touching nothing (deliberately — writing a bare 401 renders a blank "HTTP ERROR 401" page
+// in a circuit), and the net result was a 200 response with ZERO BYTES of HTML. That is exactly the reported
+// symptom: "/" and every other page came back as an empty white page, while /login — the one page without
+// [Authorize] — worked, so the app appeared to require typing /login by hand.
+//
+// Opting the component endpoints out of HTTP-level authorization is the correct fix because that check cannot
+// ever be meaningful in this architecture. Authorization is NOT weakened:
+//   • The CLIENT still enforces it. <AuthorizeRouteView> reads the same [Authorize] attribute off the routed
+//     component and renders <NotAuthorized>/<RedirectToLogin> for an anonymous visitor.
+//   • The API still enforces it. Every endpoint that returns real data validates the JWT's signature itself, so
+//     a visitor who forced a page to render would see an empty shell and a wall of 401s — no data.
+// The page markup this now serves is a UI shell containing no user data, which is precisely what it was already
+// designed to be for the pre-authentication window.
+// -------------------------------------------------------------------------------------------------
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddInteractiveServerRenderMode()
+    .AllowAnonymous();
 
 app.Run();
 
-// A do-nothing authentication handler. It never authenticates a request (our identity is JWT-in-the-browser,
-// resolved by JwtAuthenticationStateProvider, not by a server scheme) and it never actually challenges —
-// it simply returns "no result" so the framework's authorization step has a registered scheme to call
-// instead of throwing for a missing IAuthenticationService. Client-side <RedirectToLogin> handles the
-// user-visible redirect. This is the minimal, side-effect-free way to satisfy the pipeline.
+// -------------------------------------------------------------------------------------------------
+// Local helpers. Declared after the pipeline because top-level statements require it; they are hoisted, so the
+// registrations above can call them.
+// -------------------------------------------------------------------------------------------------
+
+void ConfigureApiClient(HttpClient client) => client.BaseAddress = new Uri(apiBaseUrl);
+
+void AddAuthenticatedApiClient<TClient>() where TClient : class =>
+    builder.Services
+        .AddHttpClient<TClient>(ConfigureApiClient)
+        .AddHttpMessageHandler<BearerTokenHandler>();
+
+/// <summary>
+/// An authentication handler that never authenticates and never challenges. Our identity is a JWT held in the
+/// browser and decoded by <see cref="JwtAuthenticationStateProvider"/>, not a server scheme; this type exists
+/// only so the framework's authorization step has a registered scheme to call instead of throwing for a missing
+/// <c>IAuthenticationService</c>.
+/// </summary>
+/// <remarks>
+/// WHY THE CHALLENGE AND FORBID OVERRIDES MUST BE NO-OPS
+/// The base implementations write a bare 401 and 403 to the response. Inside a server-interactive circuit that
+/// produces a blank "HTTP ERROR 401" page instead of the app. We do not want the HTTP layer to reject the
+/// request at all — we want Blazor's <c>&lt;AuthorizeRouteView&gt;/&lt;NotAuthorized&gt;</c> to render, which
+/// <c>&lt;RedirectToLogin&gt;</c> then turns into a client-side navigation. So both handlers acknowledge the
+/// challenge, touch nothing on the response, and let the component tree own the unauthorized experience.
+/// </remarks>
 internal sealed class NoOpAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
+    /// <summary>The scheme name, referenced by both the default-scheme options and the registration.</summary>
+    public const string SchemeName = "ProjectHub.Web";
+
     public NoOpAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
@@ -140,14 +201,6 @@ internal sealed class NoOpAuthenticationHandler : AuthenticationHandler<Authenti
     protected override Task<AuthenticateResult> HandleAuthenticateAsync() =>
         Task.FromResult(AuthenticateResult.NoResult());
 
-    // WHY OVERRIDE THE CHALLENGE/FORBID TO DO NOTHING?
-    // The base AuthenticationHandler.HandleChallengeAsync writes a raw 401 status to the response, and
-    // HandleForbiddenAsync writes a raw 403. In a server-interactive Blazor circuit that produces the
-    // "HTTP ERROR 401" blank page we saw instead of the app. We don't want the HTTP layer to reject the
-    // request — we want Blazor's <AuthorizeRouteView>/<NotAuthorized> to render, which our
-    // <RedirectToLogin> component then turns into a client-side navigation to /login. So both handlers
-    // must be true no-ops: acknowledge the challenge, touch nothing on the response, and let the
-    // component tree handle the unauthorized experience.
     protected override Task HandleChallengeAsync(AuthenticationProperties properties) =>
         Task.CompletedTask;
 

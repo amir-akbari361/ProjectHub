@@ -1,4 +1,5 @@
- using ProjectHub.Domain.Enums;
+ using ProjectHub.Application.Features.Search.GlobalSearch;
+using ProjectHub.Domain.Enums;
 
 namespace ProjectHub.Web.Client.Models;
 
@@ -7,6 +8,12 @@ namespace ProjectHub.Web.Client.Models;
 // API's request/response shapes (not the domain entities). Keeping a dedicated client-side set means
 // the UI never takes a hard dependency on server-internal records, and JSON (de)serialization has a
 // concrete target with property names that match the API's camelCase output.
+//
+// ENUMS ARE THE ONE THING WE DO NOT REDECLARE. Domain enums (ProjectStatus, TaskPriority, …) and the
+// Application's SearchResultType are reused directly: they ARE the contract, they are compiled into the
+// Application assembly this project already references, and a hand-copied duplicate would eventually
+// disagree with the server about a numeric value — the hardest class of bug to see, because the JSON
+// still deserializes, just into the wrong member.
 // ---------------------------------------------------------------------------------------------------
 
 /// <summary>A single page of results plus paging metadata — mirrors the API's <c>PagedList&lt;T&gt;</c>.</summary>
@@ -86,6 +93,17 @@ public sealed class CreateProjectResult
 public sealed record AddMemberRequest(Guid UserId, ProjectRole Role);
 
 public sealed record ChangeMemberRoleRequest(ProjectRole Role);
+
+/// <summary>
+/// The acknowledgement returned by <c>POST /api/projects/{id}/members</c> — mirrors the API's
+/// <c>AddMemberResponse</c>. Carries the surrogate membership id only; the roster is re-listed afterwards
+/// because the response deliberately does not echo the enriched row (email, full name) that the list
+/// projection joins in.
+/// </summary>
+public sealed class AddMemberResult
+{
+    public Guid MemberId { get; set; }
+}
 
 public sealed class MemberItem
 {
@@ -197,13 +215,36 @@ public sealed class NotificationItem
 
 // ------------------------------- Search -------------------------------
 
+/// <summary>
+/// One hit from the global search endpoint — mirrors the API's <c>SearchResultItem</c> exactly.
+/// </summary>
+/// <remarks>
+/// THIS TYPE WAS PREVIOUSLY WRONG IN THREE WAYS, AND EACH IS WORTH RECORDING BECAUSE THEY ARE THE CLASSIC
+/// FAILURE MODES OF A HAND-MAINTAINED WIRE MODEL:
+///
+/// 1. <c>Type</c> was declared <c>string</c>. The API serializes enums with the default
+///    <c>System.Text.Json</c> settings, i.e. as NUMBERS, and reading a JSON number into a <c>string</c>
+///    property THROWS rather than coercing — so every search request failed at deserialization. Declaring it
+///    as the enum makes the numeric wire form bind natively.
+/// 2. <c>Snippet</c> did not exist on the wire; the API sends <c>description</c>. A name that matches nothing
+///    deserializes silently to null, so the UI just never showed the second line — no error, no clue.
+/// 3. <c>ProjectId</c> was nullable. The API always populates it (a project hit carries its own id), so the
+///    nullability forced every caller into a <c>HasValue</c> check that could never be false.
+/// </remarks>
 public sealed class SearchResult
 {
+    public SearchResultType Type { get; set; }
     public Guid Id { get; set; }
-    public string Type { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The project this hit belongs to — for a Project hit, its own id. Always populated, which is what makes
+    /// a single "open this result" navigation possible for both hit kinds.
+    /// </summary>
+    public Guid ProjectId { get; set; }
+
     public string Title { get; set; } = string.Empty;
-    public string? Snippet { get; set; }
-    public Guid? ProjectId { get; set; }
+    public string? Description { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
 }
 
 // ------------------------------- Audit logs -------------------------------

@@ -1,0 +1,38 @@
+@page "/{*route}"
+@using ProjectHub.Web.Client.Formatting
+
+<PageTitle>Page not found · ProjectHub</PageTitle>
+
+@*
+    CATCH-ALL 404 PAGE.
+
+    WHY A ROUTED PAGE AND NOT JUST THE ROUTER'S <NotFound> SLOT
+    In a Blazor Web App, MapRazorComponents creates one HTTP endpoint per page route. A URL that matches none of
+    them never reaches Blazor at all — ASP.NET answers with a bare 404 and an empty body, so the visitor gets a
+    blank browser error page and the router's <NotFound> content is never rendered. That slot only fires for
+    CLIENT-side navigation to an unknown route, which is a different (and rarer) path.
+
+    Declaring a catch-all route means the server always has an endpoint to match, so a mistyped or stale link lands
+    on a real page inside the app, with navigation still available. The router's <NotFound> slot is kept as well:
+    it covers the client-side case, and both render the same NotFoundContent so the two paths cannot drift.
+
+    WHY THIS DOES NOT SHADOW EVERY OTHER ROUTE
+    Blazor's route matching is specificity-ordered: literal segments beat parameters, and a catch-all (`{*route}`)
+    is the lowest-precedence form there is. So "/projects" still reaches Projects.razor and only genuinely unmatched
+    URLs fall through to here.
+
+    It is deliberately NOT marked [Authorize]. A 404 is not an authorization outcome, and bouncing an anonymous
+    visitor through a sign-in they do not need — only to show them "no such page" afterwards — would be worse than
+    telling them plainly.
+*@
+
+<NotFoundContent Path="@Route" />
+
+@code {
+    /// <summary>
+    /// The unmatched path, captured by the catch-all route parameter. Shown back to the visitor so they can see
+    /// which link was wrong — useful when the URL came from an email or an out-of-date bookmark.
+    /// </summary>
+    [Parameter]
+    public string? Route { get; set; }
+}

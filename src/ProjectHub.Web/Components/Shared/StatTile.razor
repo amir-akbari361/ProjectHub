@@ -1,0 +1,70 @@
+@*
+    STAT TILE — one headline number on the dashboard.
+
+    Extracted because the dashboard had four near-identical 8-line blocks that differed only in label, value,
+    icon and gradient. The skeleton state is part of the component rather than the page's job: a tile that renders
+    "0" while its count is still in flight tells the user something false, and every caller would have had to
+    remember to guard against it.
+
+    Href is optional. When present the tile becomes a link — a count is often the fastest route to the thing it
+    counts — and it is rendered as an anchor rather than a div with a click handler so it is keyboard-reachable
+    and screen-reader-announced for free.
+*@
+
+@if (string.IsNullOrWhiteSpace(Href))
+{
+    <MudPaper Class="@($"ph-stat pa-4 {GradientClass}")" Elevation="0">
+        @Content
+    </MudPaper>
+}
+else
+{
+    <MudLink Href="@Href" Underline="Underline.None">
+        <MudPaper Class="@($"ph-stat ph-stat-link pa-4 {GradientClass}")" Elevation="0">
+            @Content
+        </MudPaper>
+    </MudLink>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public int Value { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Icon { get; set; } = string.Empty;
+
+    /// <summary>The <c>ph-grad-*</c> class that paints the tile's background wash.</summary>
+    [Parameter, EditorRequired]
+    public string GradientClass { get; set; } = string.Empty;
+
+    /// <summary>True while the value is still being fetched; renders a skeleton in place of the number.</summary>
+    [Parameter]
+    public bool Loading { get; set; }
+
+    /// <summary>Optional destination. Supplying it turns the whole tile into a link.</summary>
+    [Parameter]
+    public string? Href { get; set; }
+
+    /// <summary>
+    /// The tile's body, shared by the linked and unlinked branches above. Declared as a local RenderFragment
+    /// rather than duplicated in both branches — the point of extracting this component was to stop copying
+    /// markup, and copying it twice inside the component itself would be the same mistake at a smaller scale.
+    /// </summary>
+    private RenderFragment Content => @<text>
+        <MudText Typo="Typo.subtitle2" Style="opacity:.85;">@Label</MudText>
+        @if (Loading)
+        {
+            @* The skeleton is sized to the h3 it replaces so the tile does not resize when the value lands. *@
+            <MudSkeleton Width="60px" Height="48px" Animation="Animation.Wave"
+                         Style="background-color:rgba(255,255,255,.25);" />
+        }
+        else
+        {
+            <MudText Typo="Typo.h3" Style="font-weight:800;">@Value</MudText>
+        }
+        <MudIcon Icon="@Icon" Class="ph-stat-icon" />
+    </text>;
+}

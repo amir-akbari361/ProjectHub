@@ -1,0 +1,104 @@
+@using ProjectHub.Web.Client.Auth
+@inject TokenStore TokenStore
+@inject JwtAuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+
+@*
+    AUTHENTICATION GATE — blocks the router until the stored session has actually been read.
+
+    THE PROBLEM THIS SOLVES
+    This app is Interactive Server with prerender:false, so the SignalR circuit — and therefore JS interop, and
+    therefore localStorage — does not exist until after the first render. TokenStore.LoadAsync throws
+    InvalidOperationException during that window, which JwtAuthenticationStateProvider correctly reports as
+    "anonymous". But "anonymous" and "we have not looked yet" are the SAME answer as far as the router is
+    concerned, and it acts on it immediately:
+
+      • A signed-in user refreshing the page was judged anonymous and bounced to /login, discarding a perfectly
+        valid session held in localStorage.
+      • A signed-out visitor hit <NotAuthorized>, whose <RedirectToLogin> navigates from OnAfterRender — while the
+        previous initializer was simultaneously re-notifying the auth state on a 100ms timer. Two mechanisms
+        racing to decide the same thing is why the outcome varied between a redirect, a flash, and a page that
+        just sat there blank.
+
+    THE FIX
+    Read the token FIRST, then let the router run. By the time <Router> evaluates any [Authorize], the auth state
+    is settled: anonymous now genuinely means signed out, so RedirectToLogin is unambiguously correct, and a real
+    session survives a refresh. The timing race disappears because there is only one code path.
+
+    It also removes the white page. Until the read completes this renders a splash, and it clears the static
+    pre-circuit splash from App.razor on the way through — so every moment of startup has something on screen.
+*@
+
+@if (_ready)
+{
+    @ChildContent
+}
+else
+{
+    @* Deliberately plain markup, not MudBlazor: this renders BEFORE any layout has mounted, so there is no
+       MudThemeProvider in the tree yet and a <MudProgressCircular> here would be unstyled. *@
+    <div class="ph-boot">
+        <div class="ph-boot-spinner" role="status" aria-label="Loading ProjectHub"></div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public RenderFragment? ChildContent { get; set; }
+
+    private bool _ready;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        // The circuit is live by the time OnAfterRenderAsync runs, so this is the first moment localStorage is
+        // reachable. LoadAsync caches, so every later consumer — the auth state provider, the bearer handler —
+        // gets the value for free.
+        try
+        {
+            await TokenStore.LoadAsync();
+        }
+        catch (InvalidOperationException)
+        {
+            // Interop still unavailable against expectation. Fall through and open the gate anyway: rendering the
+            // app as signed-out is recoverable (the user signs in), whereas holding the splash forever is not.
+        }
+
+        // Publish the now-known state so <CascadingAuthenticationState> and the router evaluate against the real
+        // token rather than the empty one they would otherwise have cached.
+        AuthStateProvider.NotifyAuthenticationStateChanged();
+
+        await RemoveStaticSplashAsync();
+
+        _ready = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Removes the static splash that App.razor emits for the pre-circuit window.
+    /// </summary>
+    /// <remarks>
+    /// With prerender:false the server sends a body containing only a Blazor placeholder comment, so without that
+    /// static splash the browser shows white for as long as the circuit takes to connect. It has to be removed
+    /// from JS because it lives OUTSIDE the component tree — Blazor never owns it and so will never clean it up.
+    /// </remarks>
+    private async Task RemoveStaticSplashAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("projectHubBoot.hideSplash");
+        }
+        catch (JSException)
+        {
+            // The splash is cosmetic. If the helper is missing, the app still renders over it.
+        }
+        catch (InvalidOperationException)
+        {
+            // Interop unavailable; same reasoning.
+        }
+    }
+}

@@ -61,24 +61,45 @@ public sealed class GlobalSearchQueryHandler
         var term = request.SearchTerm.Trim();
         var pattern = $"%{term}%";
 
-        // 3. Projects the caller belongs to whose name/description matches. Projected into the common shape;
-        //    for a project hit Id and ProjectId are the same value (see SearchResultItem remarks).
+        // WHY BOTH SIDES PROJECT INTO AN ANONYMOUS TYPE INSTEAD OF DIRECTLY INTO SearchResultItem
+        // ---------------------------------------------------------------------------------------
+        // A set operation (Concat -> UNION ALL) requires EF to align the two SELECT expressions column for
+        // column. Projecting straight into `new SearchResultItem(...)` — a positional record — is a CLIENT
+        // projection: EF reads the columns and then invokes the constructor in memory, which leaves it nothing
+        // to align, and it throws "Unable to translate set operation after client projection has been applied".
+        //
+        // An anonymous type (or any member-init shape) is handled differently: EF pushes each member down into
+        // the SelectExpression and reconstructs the object after reading the row. The projection therefore stays
+        // server-side and alignable, so the UNION translates. The record is then built from the materialized rows
+        // in step 7 — after SQL has done the union, the count, the ordering and the paging.
+        //
+        // The alternative, running the two queries separately and merging in memory, would be much worse: paging
+        // and the total count both have to span the union, so it would mean fetching every match from both tables
+        // on every keystroke just to return twenty rows.
+
+        // 3. Projects the caller belongs to whose name/description matches. For a project hit Id and ProjectId
+        //    are the same value (see SearchResultItem remarks).
         var projectHits = _context.Projects
             .AsNoTracking()
             .Where(p => p.Members.Any(m => m.UserId == userId))
             .Where(p =>
                 EF.Functions.Like(p.Name.Value, pattern) ||
                 (p.Description != null && EF.Functions.Like(p.Description, pattern)))
-            .Select(p => new SearchResultItem(
-                SearchResultType.Project,
-                p.Id,
-                p.Id,
-                p.Name.Value,
-                p.Description,
-                p.CreatedAtUtc));
+            .Select(p => new
+            {
+                Type = SearchResultType.Project,
+                Id = p.Id,
+                ProjectId = p.Id,
+                Title = p.Name.Value,
+                Description = p.Description,
+                CreatedAtUtc = p.CreatedAtUtc
+            });
 
         // 4. Tasks inside the caller's projects whose title/description matches. The EXISTS keeps the
         //    membership check on the parent project without a join that could duplicate rows.
+        //
+        //    The member names, types and ORDER must match projectHits exactly — that is what makes both sides
+        //    the same anonymous type, and therefore what makes them unionable.
         var taskHits = _context.ProjectTasks
             .AsNoTracking()
             .Where(t => _context.Projects.Any(
@@ -86,16 +107,19 @@ public sealed class GlobalSearchQueryHandler
             .Where(t =>
                 EF.Functions.Like(t.Title.Value, pattern) ||
                 (t.Description != null && EF.Functions.Like(t.Description, pattern)))
-            .Select(t => new SearchResultItem(
-                SearchResultType.Task,
-                t.Id,
-                t.ProjectId,
-                t.Title.Value,
-                t.Description,
-                t.CreatedAtUtc));
+            .Select(t => new
+            {
+                Type = SearchResultType.Task,
+                Id = t.Id,
+                ProjectId = t.ProjectId,
+                Title = t.Title.Value,
+                Description = t.Description,
+                CreatedAtUtc = t.CreatedAtUtc
+            });
 
-        // 5. Union the two shapes. Concat -> UNION ALL: we already know the sets are disjoint (a project id
-        //    can never equal a task id in practice and the Type tag differs), so we skip the DISTINCT cost.
+        // 5. Union the two shapes. Concat -> UNION ALL: the sets are disjoint by construction (a row from one
+        //    branch can never equal a row from the other, because the Type tag differs), so we skip the cost of
+        //    the DISTINCT that Union would impose.
         var union = projectHits.Concat(taskHits);
 
         // 6. Total across the whole union BEFORE paging — the denominator for page-count math. Runs as a
@@ -103,13 +127,24 @@ public sealed class GlobalSearchQueryHandler
         var totalCount = await union.CountAsync(cancellationToken);
 
         // 7. Order newest-first (Id tiebreaker for stable pages across duplicate timestamps), slice to the
-        //    page, and materialize. Ordering/paging execute in SQL over the union.
-        var items = await union
-            .OrderByDescending(r => r.CreatedAtUtc)
-            .ThenBy(r => r.Id)
+        //    page, then map to the response record. Ordering and paging execute in SQL over the union; only the
+        //    twenty rows of the requested page are ever materialized.
+        var rows = await union
+            .OrderByDescending(row => row.CreatedAtUtc)
+            .ThenBy(row => row.Id)
             .Skip((request.PageNumber - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);
+
+        var items = rows
+            .Select(row => new SearchResultItem(
+                row.Type,
+                row.Id,
+                row.ProjectId,
+                row.Title,
+                row.Description,
+                row.CreatedAtUtc))
+            .ToList();
 
         _logger.LogInformation(
             "Global search for user {UserId} matched {Total} items (term length {Length}, page {Page}).",

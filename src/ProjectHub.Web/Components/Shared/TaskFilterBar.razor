@@ -1,0 +1,122 @@
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Models
+
+@*
+    TASK FILTER BAR — the shared search/status/priority/assignee controls above a task list or board.
+
+    Both the project's task list and the Kanban board need the same filter surface, and it maps 1:1 onto what the
+    API's ListTasks query accepts. Extracting it keeps the two pages from drifting (they would inevitably offer
+    different subsets) and, more importantly, keeps the filters SERVER-side: each change raises FilterChanged and
+    the page re-queries, rather than filtering the page it already has — which would contradict the row count and
+    pagination shown next to it.
+
+    The filter set travels as one immutable record rather than four separate parameters and four callbacks. A page
+    holds one field, and "the filters changed" is a single event instead of four that each need their own reset of
+    the page number.
+*@
+
+<MudPaper Class="ph-card pa-3 mb-4" Elevation="0">
+    <MudGrid Spacing="2" Class="align-center">
+        <MudItem xs="12" md="@(ShowStatus ? 4 : 5)">
+            <MudTextField T="string" Value="Filter.SearchTerm" Immediate="true"
+                          Placeholder="Search tasks…"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Clearable="true"
+                          DebounceInterval="400"
+                          ValueChanged="@(term => EmitAsync(Filter with { SearchTerm = term }))"
+                          aria-label="Search tasks" />
+        </MudItem>
+
+        @* The board omits the status filter: its COLUMNS are the statuses, so filtering by one would leave a board
+           with a single populated column and three empty ones — a worse view of the same data. *@
+        @if (ShowStatus)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="ProjectTaskStatus?" Value="Filter.Status" Label="Status"
+                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                           Clearable="true"
+                           ValueChanged="@(status => EmitAsync(Filter with { Status = status }))">
+                    <MudSelectItem T="ProjectTaskStatus?" Value="@((ProjectTaskStatus?)null)">All statuses</MudSelectItem>
+                    @foreach (var status in Enum.GetValues<ProjectTaskStatus>())
+                    {
+                        <MudSelectItem T="ProjectTaskStatus?" Value="@status">@DisplayText.Humanize(status)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        }
+
+        <MudItem xs="12" sm="6" md="@(ShowStatus ? 2 : 3)">
+            <MudSelect T="TaskPriority?" Value="Filter.Priority" Label="Priority"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                       Clearable="true"
+                       ValueChanged="@(priority => EmitAsync(Filter with { Priority = priority }))">
+                <MudSelectItem T="TaskPriority?" Value="@((TaskPriority?)null)">Any priority</MudSelectItem>
+                @foreach (var priority in Enum.GetValues<TaskPriority>())
+                {
+                    <MudSelectItem T="TaskPriority?" Value="@priority">@DisplayText.Humanize(priority)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="Guid?" Value="Filter.AssigneeId" Label="Assignee"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                       Clearable="true"
+                       ValueChanged="@(assigneeId => EmitAsync(Filter with { AssigneeId = assigneeId }))">
+                <MudSelectItem T="Guid?" Value="@((Guid?)null)">Anyone</MudSelectItem>
+                @if (CurrentUserId is { } me && Members.Find(me) is not null)
+                {
+                    @* "Assigned to me" first and labelled as such — it is far and away the most-used filter on a
+                       shared board, and making the user find their own name in an alphabetical roster is friction. *@
+                    <MudSelectItem T="Guid?" Value="@me">Assigned to me</MudSelectItem>
+                }
+                @foreach (var member in Roster)
+                {
+                    @if (member.UserId != CurrentUserId)
+                    {
+                        <MudSelectItem T="Guid?" Value="@member.UserId">@member.FullName</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="2" Class="d-flex justify-sm-end">
+            <MudButton Variant="Variant.Text" Color="Color.Default" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.FilterAltOff"
+                       Disabled="!Filter.IsActive"
+                       OnClick="@(() => EmitAsync(TaskFilter.None))">
+                Clear
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public TaskFilter Filter { get; set; } = TaskFilter.None;
+
+    [Parameter, EditorRequired]
+    public EventCallback<TaskFilter> FilterChanged { get; set; }
+
+    /// <summary>The roster, used to populate the assignee dropdown.</summary>
+    [Parameter]
+    public IReadOnlyList<MemberItem> Roster { get; set; } = Array.Empty<MemberItem>();
+
+    /// <summary>The indexed roster, used to check that the current user is actually a member.</summary>
+    [Parameter]
+    public MemberLookup Members { get; set; } = MemberLookup.Empty;
+
+    /// <summary>The signed-in user, so their own row can be surfaced as "Assigned to me".</summary>
+    [Parameter]
+    public Guid? CurrentUserId { get; set; }
+
+    /// <summary>
+    /// Whether to offer the status filter. False on the Kanban board, whose columns already partition by status.
+    /// </summary>
+    [Parameter]
+    public bool ShowStatus { get; set; } = true;
+
+    private Task EmitAsync(TaskFilter filter) => FilterChanged.InvokeAsync(filter);
+}

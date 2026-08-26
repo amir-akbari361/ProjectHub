@@ -13,6 +13,69 @@ body {
   scroll-behavior: smooth;
 }
 
+/* ---------------------------------------------------------------------------------------------------
+   BOOT SPLASH
+
+   Covers the window between the first byte and the app's first render. Two things use these rules: the
+   static #ph-splash div in App.razor (which paints before Blazor exists) and AuthenticationGate's own
+   placeholder (which renders before any layout, and therefore before MudBlazor's theme is available).
+   That is why the colours here are literals rather than MudBlazor CSS variables — those variables are
+   emitted by MudThemeProvider, which has not mounted yet.
+
+   position:fixed with a high z-index so it covers whatever the framework has put in the body, and
+   prefers-color-scheme so a dark-mode user does not get a white flash.
+   --------------------------------------------------------------------------------------------------- */
+.ph-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  background: #f7f8fc;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ph-boot {
+    background: #0b1120;
+  }
+}
+
+.ph-boot-brand {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.ph-boot-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(99, 102, 241, 0.22);
+  border-top-color: #6366f1;
+  animation: ph-boot-spin 0.7s linear infinite;
+}
+
+@keyframes ph-boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A spinning ring conveys nothing to someone who has motion disabled, and can trigger discomfort. Hold it
+   static and let the brand wordmark carry the "we are loading" message instead. */
+@media (prefers-reduced-motion: reduce) {
+  .ph-boot-spinner {
+    animation: none;
+  }
+}
+
 /* Frosted, translucent app bar that sits above a subtle brand tint. */
 .ph-appbar {
   backdrop-filter: saturate(180%) blur(12px);
@@ -59,6 +122,16 @@ body {
   cursor: pointer;
 }
 
+/* Cards and rows that act as buttons/links carry role+tabindex, which puts them in the tab order. A visible
+   focus ring is what makes that keyboard reachability actually usable — :focus-visible so it appears for
+   keyboard navigation without ringing every mouse click. */
+.ph-card[role="button"]:focus-visible,
+.ph-card[role="link"]:focus-visible,
+.ph-kanban-card:focus-visible {
+  outline: 2px solid var(--mud-palette-primary);
+  outline-offset: 2px;
+}
+
 /* Stat tiles on the dashboard: a colored gradient wash behind a big number. */
 .ph-stat {
   border-radius: 16px !important;
@@ -91,7 +164,31 @@ body {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
 }
 
-/* Kanban columns and cards. */
+/* A stat tile that links somewhere gets the same hover lift as a card, so the affordance is visible. */
+.ph-stat-link {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.ph-stat-link:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22) !important;
+}
+
+/* The quick-search field in the app bar. Bounded so it never crowds out the action icons beside it. */
+.ph-appbar-search {
+  width: 100%;
+  max-width: 320px;
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   KANBAN BOARD
+
+   The column is a flex COLUMN with a fixed header and a growing drop zone: the zone must fill the
+   remaining height so a card can be dropped anywhere in the column, not just onto the cards already
+   there. min-height keeps an empty column a legitimate target rather than a 0px sliver.
+   --------------------------------------------------------------------------------------------------- */
 .ph-kanban-column {
   border-radius: 16px;
   background-color: rgba(148, 163, 184, 0.08);
@@ -99,6 +196,7 @@ body {
   min-height: 60vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .mud-theme-dark .ph-kanban-column {
@@ -106,9 +204,58 @@ body {
   border: 1px solid rgba(30, 41, 59, 0.9);
 }
 
+.ph-kanban-column-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0.75rem 0.875rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.mud-theme-dark .ph-kanban-column-head {
+  border-bottom: 1px solid rgba(30, 41, 59, 0.9);
+}
+
+/* The status dot beside a column title — the same colour language as the task status chip. */
+.ph-kanban-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+/* flex:1 is what makes the whole remaining column area droppable. */
+.ph-kanban-dropzone {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0.75rem;
+  min-height: 80px;
+}
+
+/* Drag feedback. Without a visible state change the user cannot tell whether a drop will be accepted —
+   these two classes are the only signal MudDropZone gives us to work with. */
+.ph-kanban-dropzone-can-drop {
+  background-color: rgba(99, 102, 241, 0.1);
+  box-shadow: inset 0 0 0 2px rgba(99, 102, 241, 0.45);
+}
+
+.ph-kanban-dropzone-no-drop {
+  background-color: rgba(239, 68, 68, 0.06);
+  cursor: not-allowed;
+}
+
+.ph-kanban-empty {
+  padding: 0 0.75rem 0.875rem;
+  text-align: center;
+}
+
 .ph-kanban-card {
   border-radius: 12px !important;
   border: 1px solid rgba(148, 163, 184, 0.16);
+  cursor: grab;
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
@@ -119,11 +266,86 @@ body {
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16) !important;
 }
 
+.ph-kanban-card:active {
+  cursor: grabbing;
+}
+
+/* Two-line clamp on the card title: a long task name must not turn one card into half a column, but a
+   single line hides too much of a real name to be useful. */
+.ph-kanban-card-title {
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* MudBlazor renders the item being dragged with this class; dimming it makes the drop target read as the
+   card's destination rather than leaving two equally solid copies on screen. */
+.mud-drop-item-dragging {
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   ACTIVITY TIMELINE — the project audit trail.
+   --------------------------------------------------------------------------------------------------- */
+.ph-activity-details .mud-expand-panel-text {
+  padding: 0.5rem 0 0;
+}
+
+/* The audit diff is raw JSON: monospace, wrapped (never horizontally scrolled inside a card), and capped
+   in height so one large payload cannot push the rest of the trail off screen. */
+.ph-activity-json {
+  margin: 0;
+  padding: 0.625rem;
+  border-radius: 8px;
+  background-color: rgba(148, 163, 184, 0.12);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.mud-theme-dark .ph-activity-json {
+  background-color: rgba(15, 23, 42, 0.75);
+}
+
 /* A thin colored accent bar used on the left of cards to show priority. */
 .ph-accent-bar {
   width: 4px;
   border-radius: 4px;
   align-self: stretch;
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   TASK DRAWER — the right-anchored slide-over that hosts a task's comments and attachments.
+   MudDrawer already handles positioning, the overlay and the z-index (a temporary drawer sits above the
+   app bar), so these rules only cover what it cannot know: a comfortable reading width that collapses to
+   the full viewport on phones, and a header that does not scroll flush against the tab strip.
+   --------------------------------------------------------------------------------------------------- */
+
+.ph-task-drawer {
+  max-width: 100vw;
+}
+
+@media (max-width: 600px) {
+  /* Width is set inline by MudDrawer's Width parameter, so the override needs !important to win. */
+  .ph-task-drawer {
+    width: 100vw !important;
+  }
+}
+
+.ph-task-drawer-head {
+  padding: 1.25rem 1.25rem 1rem;
+}
+
+/* Let the tab body use the drawer's own scroll rather than introducing a second scroll container. */
+.ph-task-drawer-tabs .mud-tabs-panels {
+  overflow: visible;
 }
 
 /* Nav links: pill-shaped active state that matches the brand. */

@@ -1,0 +1,495 @@
+@page "/projects/{ProjectId:guid}/board"
+@attribute [Authorize]
+@using System.Security.Claims
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@using ApiProjectDetail = ProjectHub.Web.Client.Models.ProjectDetail
+@inject ProjectsApiClient ProjectsApi
+@inject TasksApiClient TasksApi
+@inject MembersApiClient MembersApi
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_project?.Name ?? "Board") · Board · ProjectHub</PageTitle>
+
+@* THE KANBAN BOARD — one column per workflow status, drag a card to transition it.
+
+   WHY A DEDICATED PAGE RATHER THAN A TAB ON THE PROJECT
+   A board wants the full viewport: four columns of cards inside a tab panel, itself inside a page with a header,
+   leaves each column a few cards tall and unusable. Its own route is also deep-linkable, which is what lets a
+   task hit in global search land the user on the board with the task visible in its column.
+
+   WHY DRAG-AND-DROP IS OPTIMISTIC
+   Moving a card is a direct-manipulation gesture: the card must follow the pointer and STAY where it was dropped,
+   immediately. Waiting for the API round-trip before repainting produces a card that springs back to its old
+   column for a moment, which reads as a failed drop. So the move is applied locally first and reverted only if the
+   server rejects it — see MoveTaskAsync for how the revert restores the exact prior state. *@
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-4" />
+    <MudSkeleton Width="30%" Height="42px" Class="mb-4" />
+    <MudGrid>
+        @for (var column = 0; column < 4; column++)
+        {
+            <MudItem xs="12" sm="6" md="3">
+                <MudSkeleton Width="100%" Height="220px" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_project is not null)
+{
+    <MudBreadcrumbs Items="_breadcrumbs" Class="px-0 pb-2" />
+
+    <PageHeader Title="@_project.Name" Subtitle="Drag a card between columns to change its status">
+        <Actions>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Outlined.ViewList"
+                       Href="@($"/projects/{ProjectId}")">
+                Project
+            </MudButton>
+            @if (_canContribute)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenNewTaskDialog">
+                    New Task
+                </MudButton>
+            }
+        </Actions>
+    </PageHeader>
+
+    @* Status is not offered here: the columns already partition by it. *@
+    <TaskFilterBar Filter="_filter" FilterChanged="OnFilterChangedAsync"
+                   Roster="_members" Members="_memberLookup"
+                   CurrentUserId="_currentUserId"
+                   ShowStatus="false" />
+
+    @if (_archived)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-4 rounded-lg">
+            This project is archived. The board is read-only.
+        </MudAlert>
+    }
+
+    @*
+        MudDropContainer owns the drag mechanics. Two parameters do the real work:
+        - ItemsSelector decides which zone an item belongs in, by comparing the item's status to the zone's
+          identifier. This is why the identifiers are the enum NAMES: the mapping is then total and typo-proof.
+        - ItemDropped fires once, with the item and the zone it landed in.
+        Refresh() must be called after we mutate the backing collection, because the container caches its
+        item→zone assignment and will not notice a change we made behind its back.
+    *@
+    <MudDropContainer T="TaskItem" @ref="_dropContainer"
+                      Items="_tasks"
+                      ItemsSelector="@((task, zoneIdentifier) => task.Status.ToString() == zoneIdentifier)"
+                      ItemDropped="OnItemDroppedAsync"
+                      CanDrop="@((_, _) => _canContribute && !_archived)"
+                      Class="ph-kanban">
+        <ChildContent>
+            <MudGrid Spacing="3">
+                @foreach (var status in BoardColumns)
+                {
+                    <MudItem xs="12" sm="6" md="3" @key="status">
+                        <div class="ph-kanban-column">
+                            <div class="ph-kanban-column-head">
+                                <div class="d-flex align-center gap-2">
+                                    <span class="ph-kanban-dot"
+                                          style="@($"background-color:{ColumnColor(status)};")"></span>
+                                    <MudText Typo="Typo.subtitle2" Style="font-weight:700;">
+                                        @DisplayText.Humanize(status)
+                                    </MudText>
+                                </div>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text">
+                                    @CountIn(status)
+                                </MudChip>
+                            </div>
+
+                            @* NoDropClass/CanDropClass give the column a visible state while a card hovers over
+                               it, which is the only feedback that tells the user a drop will be accepted. *@
+                            <MudDropZone T="TaskItem"
+                                         Identifier="@status.ToString()"
+                                         Class="ph-kanban-dropzone"
+                                         CanDropClass="ph-kanban-dropzone-can-drop"
+                                         NoDropClass="ph-kanban-dropzone-no-drop"
+                                         AllowReorder="false" />
+
+                            @if (CountIn(status) == 0)
+                            {
+                                @* Rendered OUTSIDE the drop zone so it never becomes a drag obstacle, and kept
+                                   deliberately faint: an empty column is normal, not a problem to flag. *@
+                                <div class="ph-kanban-empty">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @(_filter.IsActive ? "Nothing matches here" : "No tasks")
+                                    </MudText>
+                                </div>
+                            }
+                        </div>
+                    </MudItem>
+                }
+            </MudGrid>
+        </ChildContent>
+
+        <ItemRenderer>
+            @* One renderer for every zone: a card looks the same wherever it sits, and the zone communicates
+               status. context is the TaskItem being drawn. *@
+            <KanbanCard Task="context" Members="_memberLookup" OnOpenRequested="OpenTaskDrawer" />
+        </ItemRenderer>
+    </MudDropContainer>
+
+    @if (_hasMoreTasks)
+    {
+        @* The board loads a bounded page. Saying so is better than silently showing a partial board that the
+           column counts would then misrepresent as complete. *@
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mt-4 rounded-lg">
+            Showing the @BoardTaskLimit most recent tasks of @_totalTasks. Narrow the filters to see the rest.
+        </MudAlert>
+    }
+}
+
+<MudDialog @bind-Visible="_newTaskOpen" Options="DialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Outlined.Add" Class="mr-2" />New Task</MudText>
+    </TitleContent>
+    <DialogContent>
+        <EditForm Model="_newTask" OnValidSubmit="CreateTaskAsync" id="board-new-task-form">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="_newTask.Title" For="@(() => _newTask.Title)"
+                          Label="Title" Variant="Variant.Outlined" Immediate="true"
+                          Class="mb-3" MaxLength="200" Counter="200" />
+
+            <MudTextField @bind-Value="_newTask.Description" For="@(() => _newTask.Description)"
+                          Label="Description" Variant="Variant.Outlined"
+                          Lines="3" MaxLength="2000" Counter="2000" Class="mb-3" />
+
+            <MudSelect @bind-Value="_newTask.Priority" Label="Priority"
+                       Variant="Variant.Outlined" T="TaskPriority">
+                @foreach (var priority in Enum.GetValues<TaskPriority>())
+                {
+                    <MudSelectItem T="TaskPriority" Value="priority">@DisplayText.Humanize(priority)</MudSelectItem>
+                }
+            </MudSelect>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _newTaskOpen = false)" Disabled="_saving">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="board-new-task-form"
+                   Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Create
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* Rendered once, outside the columns, and re-pointed at whichever card the user opens. One instance means one set
+   of comment/attachment state; a drawer per card would create N idle components each holding their own copy. *@
+<TaskDetailDrawer Task="_selectedTask"
+                  Members="_members"
+                  Open="_taskDrawerOpen"
+                  OpenChanged="OnTaskDrawerOpenChanged"
+                  TaskChanged="OnTaskChangedAsync" />
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+
+    /// <summary>
+    /// Column order, left to right: the workflow as a team reads it. Declared explicitly rather than taken from
+    /// <c>Enum.GetValues</c> so the board's layout is a deliberate decision here, not a side effect of how the
+    /// enum happens to be declared in the domain.
+    /// </summary>
+    private static readonly ProjectTaskStatus[] BoardColumns =
+    {
+        ProjectTaskStatus.Todo,
+        ProjectTaskStatus.InProgress,
+        ProjectTaskStatus.InReview,
+        ProjectTaskStatus.Done
+    };
+
+    /// <summary>
+    /// How many tasks the board holds at once. A board is a direct-manipulation surface, so it cannot paginate —
+    /// but it also cannot render an unbounded set without becoming unusable. 200 is the API's ceiling-friendly
+    /// compromise, and exceeding it surfaces the notice above rather than silently truncating.
+    /// </summary>
+    private const int BoardTaskLimit = 200;
+
+    private static readonly DialogOptions DialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true
+    };
+
+    private MudDropContainer<TaskItem>? _dropContainer;
+
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+
+    private ApiProjectDetail? _project;
+    private List<TaskItem> _tasks = new();
+    private List<MemberItem> _members = new();
+    private MemberLookup _memberLookup = MemberLookup.Empty;
+    private int _totalTasks;
+    private bool _hasMoreTasks;
+
+    private TaskFilter _filter = TaskFilter.None;
+    private Guid? _currentUserId;
+    private bool _canContribute;
+    private bool _archived;
+
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    private bool _newTaskOpen;
+    private readonly NewTaskModel _newTask = new();
+
+    private TaskItem? _selectedTask;
+    private bool _taskDrawerOpen;
+
+    private sealed class NewTaskModel
+    {
+        [Required(ErrorMessage = "A title is required")]
+        [StringLength(200, ErrorMessage = "Title cannot exceed 200 characters")]
+        public string Title { get; set; } = string.Empty;
+
+        [StringLength(2000, ErrorMessage = "Description cannot exceed 2000 characters")]
+        public string? Description { get; set; }
+
+        public TaskPriority Priority { get; set; } = TaskPriority.Medium;
+
+        public void Reset()
+        {
+            Title = string.Empty;
+            Description = null;
+            Priority = TaskPriority.Medium;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+
+        if (Guid.TryParse(state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+        {
+            _currentUserId = userId;
+        }
+
+        await LoadAsync();
+    }
+
+    // Guarded on the id, not on _loading: navigating from one project's board straight to another's changes the
+    // route parameter without re-creating the component, and reloading only when the id actually differs avoids a
+    // redundant fetch on every unrelated parameter change.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_project is not null && _project.Id != ProjectId)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var projectResult = await ProjectsApi.GetByIdAsync(ProjectId);
+
+        if (!projectResult.IsSuccess || projectResult.Value is null)
+        {
+            _error = projectResult.Error ?? "Project not found.";
+            _loading = false;
+            return;
+        }
+
+        _project = projectResult.Value;
+        _archived = _project.Status == ProjectStatus.Archived;
+        _breadcrumbs = BuildBreadcrumbs(_project.Name);
+
+        // The roster and the tasks are independent reads, so they go out together rather than in sequence.
+        var membersTask = MembersApi.ListAsync(ProjectId);
+        var tasksTask = LoadTasksAsync();
+
+        await Task.WhenAll(membersTask, tasksTask);
+
+        var memberResult = await membersTask;
+        _members = memberResult.IsSuccess && memberResult.Value is not null ? memberResult.Value : new();
+        _memberLookup = MemberLookup.From(_members);
+
+        // Mirrors the server's rule (Contributor and above may mutate tasks) so the board does not offer a drag
+        // that is certain to come back 403. The server remains the authority.
+        _canContribute = _memberLookup.CanContribute(_currentUserId);
+
+        _loading = false;
+    }
+
+    private async Task LoadTasksAsync()
+    {
+        var result = await TasksApi.ListAsync(
+            ProjectId,
+            pageNumber: 1,
+            pageSize: BoardTaskLimit,
+            searchTerm: _filter.SearchTerm,
+            priority: _filter.Priority,
+            assigneeId: _filter.AssigneeId,
+            sortDescending: true);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Failed to load tasks.";
+            _tasks = new();
+            _totalTasks = 0;
+            _hasMoreTasks = false;
+            return;
+        }
+
+        _tasks = result.Value.Items;
+        _totalTasks = result.Value.TotalCount;
+        _hasMoreTasks = result.Value.TotalCount > _tasks.Count;
+
+        // The container caches which zone each item belongs to, so it must be told the collection was replaced.
+        _dropContainer?.Refresh();
+    }
+
+    private async Task OnFilterChangedAsync(TaskFilter filter)
+    {
+        _filter = filter;
+        await LoadTasksAsync();
+    }
+
+    /// <summary>
+    /// Handles a completed drag. Translates the zone identifier back into a status and delegates the move.
+    /// </summary>
+    private async Task OnItemDroppedAsync(MudItemDropInfo<TaskItem> dropInfo)
+    {
+        if (dropInfo.Item is null)
+        {
+            return;
+        }
+
+        // The identifier is the enum's own name (see the DropZone declarations), so this parse cannot fail unless
+        // the two drift apart — in which case failing silently is preferable to moving the card to a wrong status.
+        if (!Enum.TryParse<ProjectTaskStatus>(dropInfo.DropzoneIdentifier, out var newStatus))
+        {
+            return;
+        }
+
+        await MoveTaskAsync(dropInfo.Item, newStatus);
+    }
+
+    /// <summary>
+    /// Applies a status change optimistically, then reverts if the server rejects it.
+    /// </summary>
+    /// <remarks>
+    /// WHY THE PREVIOUS STATUS IS CAPTURED BEFORE THE CALL
+    /// The revert has to restore the status the card actually had, not "the other column" — a user can drag
+    /// Todo→Done directly, and a revert that guessed would silently corrupt the board's view of that task. Holding
+    /// the prior value is the only way to undo exactly what was done.
+    ///
+    /// WHY A NO-OP DROP RETURNS EARLY
+    /// Dropping a card back into its own column is a normal miss-drag. The API answers 409 for "already in that
+    /// status", so forwarding it would show the user an error for having changed nothing.
+    /// </remarks>
+    private async Task MoveTaskAsync(TaskItem task, ProjectTaskStatus newStatus)
+    {
+        if (task.Status == newStatus)
+        {
+            return;
+        }
+
+        var previousStatus = task.Status;
+
+        task.Status = newStatus;
+        _dropContainer?.Refresh();
+
+        var result = await TasksApi.ChangeStatusAsync(task.Id, newStatus);
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add($"Moved to {DisplayText.Humanize(newStatus)}.", Severity.Success);
+            return;
+        }
+
+        task.Status = previousStatus;
+        _dropContainer?.Refresh();
+        Snackbar.Add(result.Error ?? "Could not move the task.", Severity.Error);
+    }
+
+    private void OpenNewTaskDialog()
+    {
+        _newTask.Reset();
+        _newTaskOpen = true;
+    }
+
+    private async Task CreateTaskAsync()
+    {
+        _saving = true;
+
+        var result = await TasksApi.CreateAsync(ProjectId, new CreateTaskRequest(
+            _newTask.Title.Trim(),
+            _newTask.Description,
+            _newTask.Priority));
+
+        _saving = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to create task.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Task created.", Severity.Success);
+        _newTaskOpen = false;
+
+        // Re-list rather than inserting locally: the new task must land in the right column with the server's own
+        // id and timestamps, and it may not even match the active filter.
+        await LoadTasksAsync();
+    }
+
+    private void OpenTaskDrawer(TaskItem task)
+    {
+        _selectedTask = task;
+        _taskDrawerOpen = true;
+    }
+
+    private void OnTaskDrawerOpenChanged(bool open) => _taskDrawerOpen = open;
+
+    /// <summary>
+    /// The drawer raises this after it mutates the task it is showing. Re-listing keeps the board — whose columns
+    /// are derived from task status — consistent with a change made from inside the drawer.
+    /// </summary>
+    private async Task OnTaskChangedAsync() => await LoadTasksAsync();
+
+    private int CountIn(ProjectTaskStatus status) => _tasks.Count(task => task.Status == status);
+
+    private List<BreadcrumbItem> BuildBreadcrumbs(string projectName) => new()
+    {
+        new BreadcrumbItem("Projects", href: "/projects"),
+        new BreadcrumbItem(projectName, href: $"/projects/{ProjectId}"),
+        new BreadcrumbItem("Board", href: null, disabled: true)
+    };
+
+    /// <summary>
+    /// The dot beside a column header. Same colour language as <see cref="TaskStatusChip"/> so a status reads the
+    /// same on the board as it does in a list.
+    /// </summary>
+    private static string ColumnColor(ProjectTaskStatus status) => status switch
+    {
+        ProjectTaskStatus.Todo => "#94A3B8",
+        ProjectTaskStatus.InProgress => "#3B82F6",
+        ProjectTaskStatus.InReview => "#F59E0B",
+        ProjectTaskStatus.Done => "#10B981",
+        _ => "#94A3B8"
+    };
+}

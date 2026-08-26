@@ -1,36 +1,58 @@
-﻿@page "/Error"
+@page "/error"
 @using System.Diagnostics
+@layout AuthLayout
 
-<PageTitle>Error</PageTitle>
+<PageTitle>Something went wrong · ProjectHub</PageTitle>
 
-<h1 class="text-danger">Error.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
+@* The server-rendered fallback for an unhandled exception, wired up by UseExceptionHandler("/error") in Program.cs
+   for non-Development environments.
 
-@if (ShowRequestId)
-{
-    <p>
-        <strong>Request ID:</strong> <code>@RequestId</code>
-    </p>
-}
+   WHY THIS PAGE SAYS SO LITTLE
+   It is reached precisely when something unexpected failed, so the one thing it must not do is leak why. Exception
+   messages routinely contain connection strings, file paths and SQL — the previous version of this page went further
+   and coached the reader on switching the app into Development mode to see more, which is advice that only helps an
+   attacker on a deployed host. The request id is offered instead: it is meaningless to a stranger and lets support
+   find the matching Serilog entry, where the full detail already lives.
 
-<h3>Development Mode</h3>
-<p>
-    Swapping to <strong>Development</strong> environment will display more detailed information about the error that occurred.
-</p>
-<p>
-    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
-    It can result in displaying sensitive information from exceptions to end users.
-    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-    and restarting the app.
-</p>
+   It uses AuthLayout because MainLayout's chrome (nav, notification badge) needs a live circuit and an
+   authenticated user — neither of which can be assumed at the point an error handler runs. *@
 
-@code{
+<div class="ph-auth-card">
+    <div class="ph-auth-head">
+        <MudIcon Icon="@Icons.Material.Outlined.ErrorOutline" Color="Color.Error" Style="font-size:3rem;" />
+        <MudText Typo="Typo.h4" Class="ph-auth-title">Something went wrong</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary">
+            We hit an unexpected error while handling your request. It has been logged and we are looking into it.
+        </MudText>
+    </div>
+
+    @if (ShowRequestId)
+    {
+        <MudPaper Class="pa-3 mb-4" Elevation="0" Style="background:var(--mud-palette-background-gray);">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Request ID</MudText>
+            <MudText Typo="Typo.body2" Style="font-family:monospace; overflow-wrap:anywhere;">@RequestId</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1 d-block">
+                Quote this if you contact support.
+            </MudText>
+        </MudPaper>
+    }
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+               Class="ph-auth-submit" Href="/">
+        Back to dashboard
+    </MudButton>
+</div>
+
+@code {
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
     private string? RequestId { get; set; }
+
     private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
 
+    // Activity.Current?.Id is the W3C trace id when distributed tracing is active and correlates across services;
+    // TraceIdentifier is the per-request fallback. Serilog logs both, so either one finds the entry.
     protected override void OnInitialized() =>
         RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
 }

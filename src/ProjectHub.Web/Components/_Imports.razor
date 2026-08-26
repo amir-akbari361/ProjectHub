@@ -1,5 +1,8 @@
 ﻿@using System.Net.Http
 @using System.Net.Http.Json
+@* DataAnnotations is hoisted here because every form page declares a validated view model. Repeating the using
+   in each of them would be noise; unlike the Http/Models namespaces it says nothing about what a page DOES. *@
+@using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
@@ -12,5 +15,6 @@
 @using ProjectHub.Web
 @using ProjectHub.Web.Components
 @using ProjectHub.Web.Components.Layout
+@using ProjectHub.Web.Components.Shared
 
 

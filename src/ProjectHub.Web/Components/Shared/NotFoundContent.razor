@@ -1,0 +1,36 @@
+@*
+    The shared body for both 404 paths: the catch-all NotFound page (server-side, for a URL that matches no
+    endpoint) and the router's <NotFound> slot (client-side, for a NavigateTo to an unknown route). One component
+    so the two cannot drift into telling the user different things.
+*@
+
+<EmptyState Icon="@Icons.Material.Outlined.TravelExplore"
+            Title="We can't find that page"
+            Message="@Message">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Dashboard"
+                   Href="/">
+            Go to dashboard
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Folder"
+                   Href="/projects">
+            Browse projects
+        </MudButton>
+    </Actions>
+</EmptyState>
+
+@code {
+    /// <summary>
+    /// The unmatched path, when the caller knows it. Optional: the router's <c>&lt;NotFound&gt;</c> slot has no
+    /// route parameter to hand over, so it renders the generic message instead.
+    /// </summary>
+    [Parameter]
+    public string? Path { get; set; }
+
+    private string Message =>
+        string.IsNullOrWhiteSpace(Path)
+            ? "The link may be broken, or the page may have been moved or archived."
+            : $"Nothing lives at \"/{Path.TrimStart('/')}\". The link may be broken, or the page may have been moved.";
+}

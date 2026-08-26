@@ -1,47 +1,53 @@
 @page "/notifications"
 @attribute [Authorize]
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
 @using ProjectHub.Web.Client.Http
 @using ProjectHub.Web.Client.Models
+@using ProjectHub.Web.Client.State
 @inject NotificationsApiClient NotificationsApi
+@inject NotificationState NotificationBadge
 @inject ISnackbar Snackbar
 
 <PageTitle>Notifications · ProjectHub</PageTitle>
 
-@* The notifications page lists the current user's notifications newest-first. A filter toggles between
-   "all" and "unread only" (which re-queries the API rather than filtering client-side, so paging stays
-   correct). Individual rows can be marked read, and a single action marks everything read. *@
+@* The inbox, newest first. The All/Unread filter RE-QUERIES rather than filtering the loaded page, so the pager
+   below always describes the set actually being shown.
 
-<div class="ph-page-header">
-    <div>
-        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:800;">Notifications</MudText>
-        <MudText Typo="Typo.body1" Color="Color.Secondary">Stay on top of what's happening</MudText>
-    </div>
-    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.DoneAll"
-               OnClick="MarkAllAsync"
-               Disabled="_working || _items.Count == 0">
-        Mark all read
-    </MudButton>
-</div>
+   Every mutation here also updates the shared NotificationState, which is what the app-bar badge renders. Without
+   that the badge would keep claiming unread items on a page that visibly has none — the two live in different
+   branches of the component tree and can only agree through that service. *@
+
+<PageHeader Title="Notifications" Subtitle="Stay on top of what's happening">
+    <Actions>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.DoneAll"
+                   OnClick="MarkAllAsync"
+                   Disabled="@(_working || NotificationBadge.UnreadCount == 0)">
+            Mark all read
+        </MudButton>
+    </Actions>
+</PageHeader>
 
 <MudToggleGroup T="bool" Value="_unreadOnly" Color="Color.Primary" Class="mb-4"
                 SelectionMode="SelectionMode.SingleSelection" CheckMark="false"
-                ValueChanged="OnFilterChanged">
+                ValueChanged="OnFilterChangedAsync">
     <MudToggleItem Value="false">All</MudToggleItem>
-    <MudToggleItem Value="true">Unread</MudToggleItem>
+    <MudToggleItem Value="true">
+        @if (NotificationBadge.UnreadCount > 0)
+        {
+            @($"Unread ({NotificationBadge.UnreadCount})")
+        }
+        else
+        {
+            @("Unread")
+        }
+    </MudToggleItem>
 </MudToggleGroup>
 
 @if (_loading)
 {
-    <MudStack Spacing="2">
-        @for (var i = 0; i < 5; i++)
-        {
-            <MudPaper Class="ph-card pa-4" Elevation="0">
-                <MudSkeleton Width="70%" Height="22px" />
-                <MudSkeleton Width="30%" Height="16px" Class="mt-2" />
-            </MudPaper>
-        }
-    </MudStack>
+    <ListSkeleton Count="5" />
 }
 else if (_error is not null)
 {
@@ -49,31 +55,42 @@ else if (_error is not null)
 }
 else if (_items.Count == 0)
 {
-    <div class="ph-empty">
-        <MudIcon Icon="@Icons.Material.Outlined.NotificationsNone" Size="Size.Large" Style="font-size:4rem;" />
-        <MudText Typo="Typo.h6" Class="mt-3">You're all caught up</MudText>
-        <MudText Typo="Typo.body2">No @(_unreadOnly ? "unread " : "")notifications right now.</MudText>
-    </div>
+    <EmptyState Icon="@Icons.Material.Outlined.NotificationsNone"
+                Title="You're all caught up"
+                Message="@(_unreadOnly ? "No unread notifications right now." : "No notifications yet.")" />
 }
 else
 {
     <MudStack Spacing="2">
-        @foreach (var n in _items)
+        @foreach (var notification in _items)
         {
-            <MudPaper Class="ph-card pa-4 d-flex align-center" Elevation="0"
-                      Style="@(n.IsRead ? "opacity:.7;" : "")">
-                <MudIcon Icon="@IconFor(n.Type)"
-                         Color="@(n.IsRead ? Color.Default : Color.Primary)" Class="mr-3" />
-                <div class="flex-grow-1">
-                    <MudText Typo="Typo.body1" Style="@(n.IsRead ? "" : "font-weight:600;")">@n.Message</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@n.CreatedAtUtc.ToLocalTime().ToString("g")</MudText>
+            @* Unread rows are full-opacity and bold; read rows are dimmed. The visual weight IS the state, so the
+               list can be triaged without reading every line. *@
+            <MudPaper Class="ph-card pa-4 d-flex align-center gap-3" Elevation="0" @key="notification.Id"
+                      Style="@(notification.IsRead ? "opacity:.65;" : null)">
+                <MudIcon Icon="@IconFor(notification.Type)"
+                         Color="@(notification.IsRead ? Color.Default : ColorFor(notification.Type))" />
+
+                <div class="flex-grow-1" style="min-width:0;">
+                    <MudText Typo="Typo.body1" Style="@(notification.IsRead ? null : "font-weight:600;")">
+                        @notification.Message
+                    </MudText>
+                    <MudTooltip Text="@notification.CreatedAtUtc.ToLocalTime().ToString("f")">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @DisplayText.Humanize(notification.Type) ·
+                            @DisplayText.RelativeTime(notification.CreatedAtUtc)
+                        </MudText>
+                    </MudTooltip>
                 </div>
-                @if (!n.IsRead)
+
+                @if (!notification.IsRead)
                 {
                     <MudTooltip Text="Mark as read">
                         <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small"
-                                       Color="Color.Primary" Disabled="_working"
-                                       OnClick="@(() => MarkOneAsync(n))" />
+                                       Color="Color.Primary"
+                                       Disabled="@(_busyId == notification.Id)"
+                                       aria-label="Mark as read"
+                                       OnClick="@(() => MarkOneAsync(notification))" />
                     </MudTooltip>
                 }
             </MudPaper>
@@ -84,26 +101,37 @@ else
     {
         <div class="d-flex justify-center mt-6">
             <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_pageNumber"
-                           SelectedChanged="OnPageChanged" />
+                           SelectedChanged="OnPageChangedAsync" />
         </div>
     }
 }
 
 @code {
+    private const int PageSize = 20;
+
     private bool _loading = true;
     private bool _working;
     private string? _error;
-    private List<NotificationItem> _items = new();
+    private Guid? _busyId;
 
+    private List<NotificationItem> _items = new();
     private bool _unreadOnly;
     private int _pageNumber = 1;
-    private const int PageSize = 20;
     private int _totalPages;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
 
-    // Single load routine shared by initial render, filtering, and paging so the loading/error handling
-    // never diverges (DRY).
+        // The badge count is refreshed alongside the list so the toggle's "Unread (n)" label and the app bar agree
+        // from the first paint, rather than the badge lagging until the next navigation.
+        await NotificationBadge.RefreshAsync();
+    }
+
+    /// <summary>
+    /// The single load routine behind first render, filtering and paging, so the loading/error handling cannot
+    /// diverge between the three.
+    /// </summary>
     private async Task LoadAsync()
     {
         _loading = true;
@@ -114,34 +142,37 @@ else
         if (!result.IsSuccess || result.Value is null)
         {
             _error = result.Error ?? "Failed to load notifications.";
+            _items = new();
+            _totalPages = 0;
         }
         else
         {
             _items = result.Value.Items;
             _totalPages = result.Value.TotalPages;
+            _pageNumber = result.Value.PageNumber;
         }
 
         _loading = false;
     }
 
-    private async Task OnFilterChanged(bool unreadOnly)
+    private async Task OnFilterChangedAsync(bool unreadOnly)
     {
         _unreadOnly = unreadOnly;
         _pageNumber = 1;
         await LoadAsync();
     }
 
-    private async Task OnPageChanged(int page)
+    private async Task OnPageChangedAsync(int page)
     {
         _pageNumber = page;
         await LoadAsync();
     }
 
-    private async Task MarkOneAsync(NotificationItem n)
+    private async Task MarkOneAsync(NotificationItem notification)
     {
-        _working = true;
-        var result = await NotificationsApi.MarkAsReadAsync(n.Id);
-        _working = false;
+        _busyId = notification.Id;
+        var result = await NotificationsApi.MarkAsReadAsync(notification.Id);
+        _busyId = null;
 
         if (!result.IsSuccess)
         {
@@ -149,8 +180,22 @@ else
             return;
         }
 
-        // Reload so the unread filter and any server-side ordering stay authoritative.
-        await LoadAsync();
+        // Decrement locally instead of refetching the count: the outcome is known, and one fewer round-trip on an
+        // action a user often repeats several times in a row.
+        NotificationBadge.SetUnreadCount(NotificationBadge.UnreadCount - 1);
+
+        if (_unreadOnly)
+        {
+            // Under the unread filter the row no longer belongs in the set, so the page must be re-queried — the
+            // server decides what fills its place, and the total has changed.
+            await LoadAsync();
+            return;
+        }
+
+        // Under "All" the row stays put and simply changes weight. Mutating it in place keeps the user's scroll
+        // position, which a reload would throw away mid-triage.
+        notification.IsRead = true;
+        notification.ReadAtUtc = DateTime.UtcNow;
     }
 
     private async Task MarkAllAsync()
@@ -165,16 +210,31 @@ else
             return;
         }
 
+        NotificationBadge.SetUnreadCount(0);
         Snackbar.Add("All notifications marked as read.", Severity.Success);
         await LoadAsync();
     }
 
-    // Maps a notification type to a representative icon. Kept as a pure switch so the markup stays clean.
-    private static string IconFor(ProjectHub.Domain.Enums.NotificationType type) => type switch
+    /// <summary>Maps a notification type to a representative icon so the list scans by shape, not just text.</summary>
+    private static string IconFor(NotificationType type) => type switch
     {
-        ProjectHub.Domain.Enums.NotificationType.TaskAssigned => Icons.Material.Filled.AssignmentInd,
-        ProjectHub.Domain.Enums.NotificationType.CommentAdded => Icons.Material.Filled.Comment,
-        ProjectHub.Domain.Enums.NotificationType.ProjectInvitation => Icons.Material.Filled.GroupAdd,
+        NotificationType.TaskAssigned => Icons.Material.Filled.AssignmentInd,
+        NotificationType.TaskStatusChanged => Icons.Material.Filled.SwapHoriz,
+        NotificationType.CommentAdded => Icons.Material.Filled.Comment,
+        NotificationType.MentionedInComment => Icons.Material.Filled.AlternateEmail,
+        NotificationType.ProjectInvitation => Icons.Material.Filled.GroupAdd,
+        NotificationType.SprintStarted => Icons.Material.Filled.PlayCircleOutline,
         _ => Icons.Material.Filled.Notifications
+    };
+
+    /// <summary>
+    /// Tints an unread notification by kind. A direct mention is the one type that warrants a warning colour — it
+    /// is addressed to you personally and usually wants a reply.
+    /// </summary>
+    private static Color ColorFor(NotificationType type) => type switch
+    {
+        NotificationType.MentionedInComment => Color.Warning,
+        NotificationType.ProjectInvitation => Color.Secondary,
+        _ => Color.Primary
     };
 }

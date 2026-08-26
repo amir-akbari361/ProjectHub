@@ -1,0 +1,19 @@
+@*
+    LIST SKELETON — the placeholder for a vertical stack of rows (notifications, search hits, audit entries).
+    The row-shaped sibling of CardGridSkeleton; same reasoning, different layout.
+*@
+
+<MudStack Spacing="2">
+    @for (var i = 0; i < Count; i++)
+    {
+        <MudPaper Class="ph-card pa-4" Elevation="0">
+            <MudSkeleton Width="70%" Height="22px" />
+            <MudSkeleton Width="35%" Height="16px" Class="mt-2" />
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    [Parameter]
+    public int Count { get; set; } = 5;
+}

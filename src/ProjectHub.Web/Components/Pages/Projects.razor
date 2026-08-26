@@ -1,6 +1,8 @@
 @page "/projects"
 @attribute [Authorize]
+@using ProjectHub.Application.Features.Projects.ListProjects
 @using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
 @using ProjectHub.Web.Client.Http
 @using ProjectHub.Web.Client.Models
 @inject ProjectsApiClient ProjectsApi
@@ -9,42 +11,72 @@
 
 <PageTitle>Projects · ProjectHub</PageTitle>
 
-@* Projects list with server-side search + a create dialog. The list reloads whenever the search term
-   changes (debounced by MudTextField's OnDebounceIntervalElapsed) so we don't hammer the API on every
-   keystroke. *@
+@* The full project list with the server's whole list surface exposed: text search, a status filter, and a sort
+   control. All three are SERVER-side — they change the query, not a client-side filter over the current page —
+   because filtering the loaded page would produce a result set that disagrees with the pagination beneath it. *@
 
-<div class="ph-page-header">
-    <div>
-        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:800;">Projects</MudText>
-        <MudText Typo="Typo.body1" Color="Color.Secondary">Browse and manage your projects</MudText>
-    </div>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-               StartIcon="@Icons.Material.Filled.Add"
-               OnClick="OpenCreateDialog">
-        New Project
-    </MudButton>
-</div>
+<PageHeader Title="Projects" Subtitle="Browse and manage your projects">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="OpenCreateDialog">
+            New Project
+        </MudButton>
+    </Actions>
+</PageHeader>
 
-<MudTextField T="string" @bind-Value="_searchTerm" Immediate="true"
-              Placeholder="Search projects…"
-              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-4"
-              DebounceInterval="400" OnDebounceIntervalElapsed="OnSearchChanged" />
+<MudPaper Class="ph-card pa-3 mb-4" Elevation="0">
+    <MudGrid Spacing="2" Class="align-center">
+        <MudItem xs="12" md="5">
+            @* Debounced rather than fired per keystroke: the server does a LIKE scan, and 400ms is long enough
+               that a typist produces one request per word instead of one per letter. *@
+            <MudTextField T="string" @bind-Value="_searchTerm" Immediate="true"
+                          Placeholder="Search projects…"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Clearable="true"
+                          DebounceInterval="400" OnDebounceIntervalElapsed="OnSearchChanged"
+                          aria-label="Search projects" />
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            @* T is ProjectStatus? so "All" can be a real value (null) rather than a magic sentinel. *@
+            <MudSelect T="ProjectStatus?" Value="_status" Label="Status"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                       ValueChanged="OnStatusChanged" Clearable="true">
+                <MudSelectItem T="ProjectStatus?" Value="@((ProjectStatus?)null)">All statuses</MudSelectItem>
+                @foreach (var status in Enum.GetValues<ProjectStatus>())
+                {
+                    <MudSelectItem T="ProjectStatus?" Value="@status">@DisplayText.Humanize(status)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudSelect T="ProjectSortBy" Value="_sortBy" Label="Sort by"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                       ValueChanged="OnSortChanged">
+                @foreach (var option in Enum.GetValues<ProjectSortBy>())
+                {
+                    <MudSelectItem T="ProjectSortBy" Value="@option">@DisplayText.Humanize(option)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="1" Class="d-flex justify-md-center">
+            <MudTooltip Text="@(_sortDescending ? "Descending — click for ascending" : "Ascending — click for descending")">
+                <MudIconButton Icon="@(_sortDescending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)"
+                               Color="Color.Primary" Variant="Variant.Outlined"
+                               aria-label="Toggle sort direction"
+                               OnClick="ToggleSortDirectionAsync" />
+            </MudTooltip>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
 
 @if (_loading)
 {
-    <MudGrid>
-        @for (var i = 0; i < 6; i++)
-        {
-            <MudItem xs="12" sm="6" md="4">
-                <MudPaper Class="ph-card pa-4" Elevation="0">
-                    <MudSkeleton Width="60%" Height="28px" />
-                    <MudSkeleton Width="100%" Height="18px" Class="mt-2" />
-                    <MudSkeleton Width="40%" Height="18px" Class="mt-2" />
-                </MudPaper>
-            </MudItem>
-        }
-    </MudGrid>
+    <CardGridSkeleton Count="6" />
 }
 else if (_error is not null)
 {
@@ -52,36 +84,48 @@ else if (_error is not null)
 }
 else if (_projects.Count == 0)
 {
-    <div class="ph-empty">
-        <MudIcon Icon="@Icons.Material.Outlined.FolderOff" Size="Size.Large" Style="font-size:4rem;" />
-        <MudText Typo="Typo.h6" Class="mt-3">No projects found</MudText>
-        <MudText Typo="Typo.body2">Try a different search, or create a new project.</MudText>
-    </div>
+    @* The empty state distinguishes "no projects at all" from "no projects matching this filter", because the
+       remedy is completely different — create one, versus clear your filters. *@
+    @if (HasActiveFilters)
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.FilterAltOff"
+                    Title="No projects match your filters"
+                    Message="Try a different search term or status.">
+            <Actions>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Clear"
+                           OnClick="ClearFiltersAsync">
+                    Clear filters
+                </MudButton>
+            </Actions>
+        </EmptyState>
+    }
+    else
+    {
+        <EmptyState Icon="@Icons.Material.Outlined.FolderOff"
+                    Title="No projects yet"
+                    Message="Create your first project to start organising work.">
+            <Actions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Add"
+                           OnClick="OpenCreateDialog">
+                    New Project
+                </MudButton>
+            </Actions>
+        </EmptyState>
+    }
 }
 else
 {
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+        @_totalCount @(_totalCount == 1 ? "project" : "projects")
+    </MudText>
+
     <MudGrid>
         @foreach (var project in _projects)
         {
-            <MudItem xs="12" sm="6" md="4">
-                <MudPaper Class="ph-card ph-card-hover pa-4" Elevation="0"
-                          @onclick="@(() => Nav.NavigateTo($"/projects/{project.Id}"))">
-                    <div class="d-flex align-center justify-space-between mb-2">
-                        <MudText Typo="Typo.h6" Style="font-weight:700;">@project.Name</MudText>
-                        <MudChip T="string" Size="Size.Small"
-                                 Color="@(project.Status == ProjectStatus.Active ? Color.Success : Color.Default)"
-                                 Variant="Variant.Filled">
-                            @project.Status
-                        </MudChip>
-                    </div>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3" Style="min-height:40px;">
-                        @(string.IsNullOrWhiteSpace(project.Description) ? "No description" : project.Description)
-                    </MudText>
-                    <div class="d-flex align-center">
-                        <MudIcon Icon="@Icons.Material.Outlined.Group" Size="Size.Small" Class="mr-1" />
-                        <MudText Typo="Typo.caption">@project.MemberCount members</MudText>
-                    </div>
-                </MudPaper>
+            <MudItem xs="12" sm="6" md="4" @key="project.Id">
+                <ProjectCard Project="project" />
             </MudItem>
         }
     </MudGrid>
@@ -95,21 +139,33 @@ else
     }
 }
 
-@* Create dialog. MudDialog is bound to _createOpen; the form uses a simple model + validation-on-submit. *@
-<MudDialog @bind-Visible="_createOpen" Options="new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true }">
+<MudDialog @bind-Visible="_createOpen" Options="DialogOptions">
     <TitleContent>
-        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Filled.CreateNewFolder" Class="mr-2" />Create Project</MudText>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.CreateNewFolder" Class="mr-2" />Create Project
+        </MudText>
     </TitleContent>
     <DialogContent>
-        <MudTextField @bind-Value="_newName" Label="Name" Required="true" Variant="Variant.Outlined"
-                      Immediate="true" Class="mb-3" MaxLength="200" Counter="200" />
-        <MudTextField @bind-Value="_newDescription" Label="Description" Variant="Variant.Outlined"
-                      Lines="3" MaxLength="1000" Counter="1000" />
+        @* EditForm + DataAnnotations gives inline field errors before the network is touched. The API's
+           FluentValidation stays authoritative; this just catches the obvious cases instantly. *@
+        <EditForm Model="_createModel" OnValidSubmit="CreateAsync" id="create-project-form">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="_createModel.Name" For="@(() => _createModel.Name)"
+                          Label="Name" Variant="Variant.Outlined" Immediate="true"
+                          Class="mb-3" MaxLength="200" Counter="200" />
+
+            <MudTextField @bind-Value="_createModel.Description" For="@(() => _createModel.Description)"
+                          Label="Description" Variant="Variant.Outlined"
+                          Lines="3" MaxLength="1000" Counter="1000" />
+        </EditForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="@(() => _createOpen = false)">Cancel</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAsync"
-                   Disabled="_creating || string.IsNullOrWhiteSpace(_newName)">
+        <MudButton OnClick="@(() => _createOpen = false)" Disabled="_creating">Cancel</MudButton>
+        @* ButtonType.Submit with the form's id submits the EditForm from OUTSIDE it, so validation still runs
+           even though MudDialog renders its actions in a separate slot from its content. *@
+        <MudButton ButtonType="ButtonType.Submit" form="create-project-form"
+                   Variant="Variant.Filled" Color="Color.Primary" Disabled="_creating">
             @if (_creating)
             {
                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
@@ -120,24 +176,59 @@ else
 </MudDialog>
 
 @code {
+    private const int PageSize = 12;
+
+    private static readonly DialogOptions DialogOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true
+    };
+
     private bool _loading = true;
     private bool _creating;
     private string? _error;
+
     private List<ProjectListItem> _projects = new();
+    private int _pageNumber = 1;
+    private int _totalPages;
+    private int _totalCount;
 
     private string? _searchTerm;
-    private int _pageNumber = 1;
-    private const int PageSize = 12;
-    private int _totalPages;
+    private ProjectStatus? _status;
+    private ProjectSortBy _sortBy = ProjectSortBy.CreatedAt;
+    private bool _sortDescending = true;
 
     private bool _createOpen;
-    private string _newName = string.Empty;
-    private string? _newDescription;
+    private readonly CreateProjectModel _createModel = new();
+
+    private bool HasActiveFilters => !string.IsNullOrWhiteSpace(_searchTerm) || _status is not null;
+
+    /// <summary>
+    /// The create-project form's view model. DataAnnotations here mirror the server's validator so the user gets
+    /// immediate, field-level feedback instead of a single sentence from the API after a round-trip.
+    /// </summary>
+    private sealed class CreateProjectModel
+    {
+        [Required(ErrorMessage = "A project name is required")]
+        [StringLength(200, ErrorMessage = "Name cannot exceed 200 characters")]
+        public string Name { get; set; } = string.Empty;
+
+        [StringLength(1000, ErrorMessage = "Description cannot exceed 1000 characters")]
+        public string? Description { get; set; }
+
+        public void Reset()
+        {
+            Name = string.Empty;
+            Description = null;
+        }
+    }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
-    // Central load routine used by initial render, search, and paging. Keeping it in one place means the
-    // loading/error handling logic is never duplicated (DRY).
+    /// <summary>
+    /// The single load routine behind first render, search, filtering, sorting and paging. Centralising it means
+    /// the loading/error handling can never diverge between those five entry points.
+    /// </summary>
     private async Task LoadAsync()
     {
         _loading = true;
@@ -147,25 +238,61 @@ else
             pageNumber: _pageNumber,
             pageSize: PageSize,
             searchTerm: _searchTerm,
-            sortBy: "createdAt",
-            sortDescending: true);
+            status: _status,
+            sortBy: _sortBy,
+            sortDescending: _sortDescending);
 
         if (!result.IsSuccess || result.Value is null)
         {
             _error = result.Error ?? "Failed to load projects.";
+            _projects = new();
+            _totalPages = 0;
+            _totalCount = 0;
         }
         else
         {
             _projects = result.Value.Items;
             _totalPages = result.Value.TotalPages;
+            _totalCount = result.Value.TotalCount;
         }
 
         _loading = false;
     }
 
+    // Every filter change resets to page 1. Without that, narrowing a filter while on page 4 lands the user on a
+    // page that no longer exists and shows an empty grid over a pager that says there is data.
     private async Task OnSearchChanged(string term)
     {
         _searchTerm = term;
+        _pageNumber = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnStatusChanged(ProjectStatus? status)
+    {
+        _status = status;
+        _pageNumber = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnSortChanged(ProjectSortBy sortBy)
+    {
+        _sortBy = sortBy;
+        _pageNumber = 1;
+        await LoadAsync();
+    }
+
+    private async Task ToggleSortDirectionAsync()
+    {
+        _sortDescending = !_sortDescending;
+        _pageNumber = 1;
+        await LoadAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _searchTerm = null;
+        _status = null;
         _pageNumber = 1;
         await LoadAsync();
     }
@@ -178,20 +305,17 @@ else
 
     private void OpenCreateDialog()
     {
-        _newName = string.Empty;
-        _newDescription = null;
+        _createModel.Reset();
         _createOpen = true;
     }
 
     private async Task CreateAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newName))
-        {
-            return;
-        }
-
         _creating = true;
-        var result = await ProjectsApi.CreateAsync(new CreateProjectRequest(_newName.Trim(), _newDescription));
+
+        var result = await ProjectsApi.CreateAsync(
+            new CreateProjectRequest(_createModel.Name.Trim(), _createModel.Description));
+
         _creating = false;
 
         if (!result.IsSuccess || result.Value is null)
@@ -202,6 +326,9 @@ else
 
         Snackbar.Add("Project created.", Severity.Success);
         _createOpen = false;
+
+        // Straight into the new project: the user's next action is almost always to add tasks or members, and
+        // returning them to a list where they must hunt for the row they just made is pure friction.
         Nav.NavigateTo($"/projects/{result.Value.Id}");
     }
 }

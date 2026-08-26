@@ -1,0 +1,38 @@
+@*
+    PAGE HEADER — the title/subtitle/actions band every page opens with.
+
+    Extracted because the same three-element flex row was hand-rolled on Dashboard, Projects, Notifications
+    and Search. Four copies meant four places to adjust when the spacing or type scale changes, and they had
+    already drifted (differing margins on the subtitle). Actions is a RenderFragment rather than a set of
+    button parameters so a page can put anything there — one button, a button group, a filter — without this
+    component growing a parameter per use case.
+*@
+
+<div class="ph-page-header">
+    <div>
+        <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:800;">@Title</MudText>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <MudText Typo="Typo.body1" Color="Color.Secondary">@Subtitle</MudText>
+        }
+    </div>
+
+    @if (Actions is not null)
+    {
+        <div class="d-flex align-center flex-wrap gap-2">
+            @Actions
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Subtitle { get; set; }
+
+    /// <summary>Trailing controls (buttons, filters). Omitted renders a title-only header.</summary>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+}

@@ -1,0 +1,50 @@
+@*
+    EMPTY STATE — the centered icon/heading/message block shown when a collection has no rows.
+
+    Every list surface in the app needs one, and each had its own copy with slightly different icon sizes and
+    margins. Consolidating also makes the "empty" case a deliberate, designed state rather than an
+    afterthought: a blank region reads as a broken page, whereas this reads as "nothing here yet, and here is
+    what to do about it" — which is what the optional Actions slot is for.
+*@
+
+<div class="ph-empty">
+    <MudIcon Icon="@Icon" Size="Size.Large" Style="@($"font-size:{IconFontSize};")" />
+    <MudText Typo="Typo.h6" Class="mt-3">@Title</MudText>
+
+    @if (!string.IsNullOrWhiteSpace(Message))
+    {
+        <MudText Typo="Typo.body2" Class="@(Actions is null ? null : "mb-4")">@Message</MudText>
+    }
+
+    @if (Actions is not null)
+    {
+        <div class="d-flex align-center justify-center flex-wrap gap-2">
+            @Actions
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Icon { get; set; } = Icons.Material.Outlined.Inbox;
+
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    /// <summary>
+    /// Optional call-to-action. Present on first-run states ("create your first project"); omitted on
+    /// states the user cannot act on ("no unread notifications").
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Actions { get; set; }
+
+    /// <summary>
+    /// Icon scale. Defaults to the full-page size; nested surfaces (a tab panel, a drawer) pass a smaller
+    /// value so the illustration does not dominate a region that is already visually contained.
+    /// </summary>
+    [Parameter]
+    public string IconFontSize { get; set; } = "4rem";
+}

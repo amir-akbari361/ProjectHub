@@ -1,0 +1,129 @@
+@page "/confirm-email"
+@using ProjectHub.Web.Client.Http
+@inject AuthApiClient AuthApi
+@layout AuthLayout
+
+<PageTitle>Confirm your email · ProjectHub</PageTitle>
+
+@* The landing page for the activation link in a registration email.
+
+   WHY THIS RUNS AUTOMATICALLY INSTEAD OF SHOWING A "CONFIRM" BUTTON
+   The user already expressed intent by clicking the link in their inbox; asking them to click again is a second
+   step that serves nobody. The confirmation is a state transition on their own account, not a destructive action
+   that warrants a guard.
+
+   WHY IT RUNS IN OnAfterRenderAsync AND NOT OnInitializedAsync
+   The API call needs the access-token pipeline and, more importantly, must happen ONCE. In Interactive Server
+   mode OnInitializedAsync can run during the pre-interactive pass and again on the live circuit — which would
+   redeem this single-use token twice, and the second attempt would fail and show an error for a confirmation that
+   actually succeeded. Gating on firstRender in OnAfterRenderAsync guarantees exactly one attempt. *@
+
+<div class="ph-auth-card">
+    <div class="ph-auth-head">
+        @switch (_state)
+        {
+            case ConfirmationState.Working:
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+                <MudText Typo="Typo.h5" Class="ph-auth-title">Confirming your email…</MudText>
+                break;
+
+            case ConfirmationState.Confirmed:
+                <MudIcon Icon="@Icons.Material.Outlined.MarkEmailRead" Color="Color.Success"
+                         Style="font-size:3rem;" />
+                <MudText Typo="Typo.h4" Class="ph-auth-title">Email confirmed</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    Your account is active. You can sign in now.
+                </MudText>
+                break;
+
+            case ConfirmationState.MissingToken:
+                <MudIcon Icon="@Icons.Material.Outlined.LinkOff" Color="Color.Warning" Style="font-size:3rem;" />
+                <MudText Typo="Typo.h4" Class="ph-auth-title">This link is incomplete</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">
+                    The confirmation link is missing its token. Email clients sometimes truncate long links — try
+                    opening it directly from your inbox.
+                </MudText>
+                break;
+
+            case ConfirmationState.Failed:
+                <MudIcon Icon="@Icons.Material.Outlined.ErrorOutline" Color="Color.Error" Style="font-size:3rem;" />
+                <MudText Typo="Typo.h4" Class="ph-auth-title">We could not confirm this link</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">@_error</MudText>
+                break;
+        }
+    </div>
+
+    @if (_state == ConfirmationState.Confirmed)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+                   Class="ph-auth-submit" Href="/login">
+            Sign in
+        </MudButton>
+    }
+    else if (_state is ConfirmationState.Failed or ConfirmationState.MissingToken)
+    {
+        @* A confirmation link that is expired or already spent is the common case here, and it is not
+           recoverable from this page — the remedy is a fresh link, which registration or sign-in triggers. *@
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-4 rounded-lg">
+            Confirmation links are single-use and expire. If yours has already been used, your account may
+            already be active — try signing in.
+        </MudAlert>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Href="/login">
+            Go to sign in
+        </MudButton>
+    }
+</div>
+
+@code {
+    /// <summary>The one-time confirmation token from the emailed link.</summary>
+    [SupplyParameterFromQuery(Name = "token")]
+    private string? Token { get; set; }
+
+    /// <summary>
+    /// The four states this page can be in. Modelled as an enum rather than a pair of bools (<c>_busy</c> +
+    /// <c>_succeeded</c>), which would admit the meaningless combination "busy AND succeeded" and force every
+    /// branch in the markup to reason about it.
+    /// </summary>
+    private enum ConfirmationState
+    {
+        Working,
+        Confirmed,
+        Failed,
+        MissingToken
+    }
+
+    private ConfirmationState _state = ConfirmationState.Working;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Token))
+        {
+            _state = ConfirmationState.MissingToken;
+            StateHasChanged();
+            return;
+        }
+
+        var result = await AuthApi.ConfirmEmailAsync(Token);
+
+        if (result.IsSuccess)
+        {
+            _state = ConfirmationState.Confirmed;
+        }
+        else
+        {
+            _state = ConfirmationState.Failed;
+            _error = result.Error ?? "The confirmation link is invalid or has expired.";
+        }
+
+        // Explicit because OnAfterRenderAsync does NOT trigger a re-render on its own the way the lifecycle
+        // methods that run before the first render do.
+        StateHasChanged();
+    }
+}

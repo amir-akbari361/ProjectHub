@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Dev-time utility (NOT shipped): generates and inserts realistic test data into the ProjectHub
+    database. It reuses the real domain factory methods and EF mappings via a direct reference to
+    Persistence + Domain, so seeded rows are identical to rows the running app would produce.
+    Kept under tools/ and out of the API/Web hosts so it can never run in production by accident.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ProjectHub.DataSeeder</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ProjectHub.Persistence\ProjectHub.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\ProjectHub.Domain\ProjectHub.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Same BCrypt library/version as Infrastructure so the seeded hash format matches login. -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+
+    <!-- EF Core runtime + SQL Server provider: the seeder builds its own DbContextOptions. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.0" />
+
+    <!-- Configuration: read the connection string + Seed defaults from appsettings/env vars. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Travel next to the binary so AppContext.BaseDirectory resolves it under `dotnet run`. -->
+    <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

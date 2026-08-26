@@ -1,21 +1,33 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@implements IDisposable
+@using System.Security.Claims
+@using ProjectHub.Web.Client.Auth
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.State
+@using ProjectHub.Web.Client.Theme
+@inject AuthApiClient AuthApi
+@inject NotificationState Notifications
+@inject ThemePreferenceStore ThemePreference
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
 
-@* MudThemeProvider applies the active theme + light/dark palette to every descendant. The @ref lets
-   us read its system-preference in OnAfterRender. MudPopoverProvider hosts menus/tooltips; MudDialogProvider
-   hosts modal dialogs; MudSnackbarProvider hosts toast notifications. All three must live once, at the
-   root, or the corresponding features silently no-op. *@
-<MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
+@* The provider trio must live once, at the root, or the corresponding features silently no-op:
+   MudPopoverProvider hosts menus/tooltips, MudDialogProvider hosts modals, MudSnackbarProvider hosts toasts.
+   The theme itself comes from ProjectHubTheme so this layout and AuthLayout cannot drift apart. *@
+<MudThemeProvider @ref="_themeProvider" IsDarkMode="_isDarkMode" Theme="ProjectHubTheme.Instance" />
 <MudPopoverProvider />
 <MudDialogProvider CloseButton="true" MaxWidth="MaxWidth.Small" FullWidth="true" BackdropClick="false" />
 <MudSnackbarProvider />
 
 <MudLayout>
-    @* A frosted-glass, gradient-tinted app bar. Elevation 0 keeps the design flat/modern; the border and
-       blur come from the class below so it reads as a "sticky header" rather than a heavy toolbar. *@
+    @* A frosted, gradient-tinted app bar. Elevation 0 keeps the design flat; the blur and border come from
+       .ph-appbar so it reads as a sticky header rather than a heavy toolbar. *@
     <MudAppBar Elevation="0" Color="Color.Transparent" Class="ph-appbar px-4">
         <MudIconButton Icon="@Icons.Material.Outlined.Menu"
                        Color="Color.Inherit"
                        Edge="Edge.Start"
+                       aria-label="Toggle navigation"
                        OnClick="ToggleDrawer" />
 
         <MudIcon Icon="@Icons.Material.Filled.Hub" Class="ml-2 mr-2" Color="Color.Primary" />
@@ -23,24 +35,68 @@
 
         <MudSpacer />
 
+        @* Everything from here on is meaningful only to a signed-in user. This layout also wraps the router's
+           <NotAuthorized> content for the single frame before <RedirectToLogin> navigates, and an app bar
+           advertising a search box, an inbox and "Signed in as Unknown" to someone on their way to the login page
+           is just noise. The theme toggle stays outside the guard: it is a display preference, not an account
+           feature, and it works perfectly well for an anonymous visitor. *@
+        @if (_authenticated)
+        {
+            @* Quick search. Enter navigates to the full results page rather than searching inline — the app bar is
+               not the place to render a result list, and /search is shareable with its term in the URL. *@
+            <div class="ph-appbar-search d-none d-sm-flex mr-2">
+                <MudTextField T="string" @bind-Value="_quickSearch"
+                              Placeholder="Search…"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Outlined.Search"
+                              Immediate="false"
+                              OnKeyUp="OnQuickSearchKeyUp"
+                              aria-label="Search projects and tasks" />
+            </div>
+        }
+
         <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
             <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                            Color="Color.Inherit"
-                           OnClick="ToggleDarkMode" />
+                           aria-label="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")"
+                           OnClick="ToggleDarkModeAsync" />
         </MudTooltip>
 
-        <MudTooltip Text="Notifications">
-            <MudBadge Content="0" Color="Color.Error" Overlap="true" Bordered="true" Visible="false">
-                <MudIconButton Icon="@Icons.Material.Outlined.Notifications" Color="Color.Inherit" />
-            </MudBadge>
-        </MudTooltip>
+        @if (_authenticated)
+        {
+            <MudTooltip Text="@NotificationTooltip">
+                @* Visible is bound to the count so a zero-unread inbox shows a clean bell rather than a "0" badge,
+                   which reads as an alert about nothing. *@
+                <MudBadge Content="@Notifications.UnreadCount"
+                          Color="Color.Error"
+                          Overlap="true"
+                          Bordered="true"
+                          Max="99"
+                          Visible="@(Notifications.UnreadCount > 0)">
+                    <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
+                                   Color="Color.Inherit"
+                                   aria-label="@NotificationTooltip"
+                                   OnClick="@(() => Nav.NavigateTo("/notifications"))" />
+                </MudBadge>
+            </MudTooltip>
 
-        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-            <MudMenuItem Icon="@Icons.Material.Outlined.Person">Profile</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Outlined.Settings">Settings</MudMenuItem>
-            <MudDivider />
-            <MudMenuItem Icon="@Icons.Material.Outlined.Logout">Sign out</MudMenuItem>
-        </MudMenu>
+            <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit"
+                     AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+                     aria-label="Account menu">
+                @* The signed-in identity, read from the JWT we already hold. Shown as a non-interactive header so
+                   the user can confirm WHICH account they are acting as before taking an account action. *@
+                <div class="px-4 py-2">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Signed in as</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight:600;">@_email</MudText>
+                </div>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Outlined.Person" Href="/profile">Profile</MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Outlined.Logout" OnClick="LogoutAsync">Sign out</MudMenuItem>
+            </MudMenu>
+        }
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Elevation="0" Variant="@DrawerVariant.Responsive"
@@ -49,17 +105,32 @@
     </MudDrawer>
 
     <MudMainContent Class="ph-main">
-        @* Error boundary catches unhandled exceptions from any child component and shows a friendly
-           fallback instead of tearing down the whole circuit. In dev the raw error still logs. *@
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
-            <ErrorBoundary>
+            @* An ErrorBoundary keeps one misbehaving page from tearing down the whole circuit, which would drop
+               the user to a dead browser tab. Recover() lets them retry without a full reload. *@
+            <ErrorBoundary @ref="_errorBoundary">
                 <ChildContent>
                     @Body
                 </ChildContent>
                 <ErrorContent>
-                    <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="rounded-lg">
-                        Something went wrong while rendering this page. Please reload.
-                    </MudAlert>
+                    <MudPaper Class="ph-card pa-6" Elevation="0">
+                        <div class="d-flex align-center gap-3 mb-3">
+                            <MudIcon Icon="@Icons.Material.Outlined.ErrorOutline" Color="Color.Error" Size="Size.Large" />
+                            <MudText Typo="Typo.h6" Style="font-weight:700;">Something went wrong</MudText>
+                        </div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                            This page failed to render. The error has been logged. You can try again, or head back
+                            to your dashboard.
+                        </MudText>
+                        <div class="d-flex gap-2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Refresh"
+                                       OnClick="RecoverFromError">
+                                Try again
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Href="/">Go to dashboard</MudButton>
+                        </div>
+                    </MudPaper>
                 </ErrorContent>
             </ErrorBoundary>
         </MudContainer>
@@ -68,72 +139,114 @@
 
 @code {
     private MudThemeProvider _themeProvider = null!;
+    private ErrorBoundary? _errorBoundary;
+
     private bool _isDarkMode = true;
     private bool _drawerOpen = true;
+    private string? _quickSearch;
+    private string? _email;
 
-    // A single shared theme instance. Defining it here (rather than inline) means every page inherits
-    // the same palette/typography and gives us one place to brand the app.
-    private readonly MudTheme _theme = new()
+    // Whether the current visitor is signed in. This layout also wraps the router's <NotAuthorized> content for a
+    // single frame while <RedirectToLogin> bounces an anonymous visitor to /login — and during that frame the
+    // notification badge must NOT fire a request that can only come back 401, nor render "Signed in as Unknown".
+    private bool _authenticated;
+
+    private string NotificationTooltip => Notifications.UnreadCount switch
     {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#6366F1",       // indigo
-            Secondary = "#8B5CF6",     // violet
-            Tertiary = "#06B6D4",      // cyan
-            AppbarBackground = "#FFFFFF",
-            Background = "#F7F8FC",
-            BackgroundGray = "#EEF0F7",
-            Surface = "#FFFFFF",
-            DrawerBackground = "#FFFFFF",
-            DrawerText = "#334155",
-            Success = "#10B981",
-            Warning = "#F59E0B",
-            Error = "#EF4444",
-            Info = "#3B82F6",
-            TextPrimary = "#1E293B",
-            TextSecondary = "#64748B"
-        },
-        PaletteDark = new PaletteDark
-        {
-            Primary = "#818CF8",       // lighter indigo for contrast on dark
-            Secondary = "#A78BFA",
-            Tertiary = "#22D3EE",
-            AppbarBackground = "#0F172A",
-            Background = "#0B1120",
-            BackgroundGray = "#111827",
-            Surface = "#161E2E",
-            DrawerBackground = "#0F172A",
-            DrawerText = "#CBD5E1",
-            Success = "#34D399",
-            Warning = "#FBBF24",
-            Error = "#F87171",
-            Info = "#60A5FA",
-            TextPrimary = "#E2E8F0",
-            TextSecondary = "#94A3B8",
-            LinesDefault = "#1E293B",
-            TableLines = "#1E293B"
-        },
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "12px",
-            DrawerWidthLeft = "260px"
-        }
+        0 => "Notifications",
+        1 => "1 unread notification",
+        var count => $"{count} unread notifications"
     };
 
-
-    // On first render we can call JS interop, so we ask the browser for its OS-level colour preference
-    // and honour it. OnAfterRenderAsync (not OnInitialized) because interop is unavailable during
-    // server prerendering. StateHasChanged forces a re-render with the resolved value.
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnInitializedAsync()
     {
-        if (firstRender)
-        {
-            _isDarkMode = await _themeProvider.GetSystemPreference();
-            StateHasChanged();
-        }
+        // Re-render the badge whenever the shared count moves — including from the notifications page, which
+        // lives in a different branch of the tree and can only reach us through this service.
+        Notifications.Changed += OnNotificationsChanged;
+
+        // The badge is chrome on every page, so it must refresh as the user moves around. Subscribing to
+        // navigation is what keeps it accurate without a polling timer; see NotificationState for that trade-off.
+        Nav.LocationChanged += OnLocationChanged;
+
+        await LoadIdentityAsync();
     }
 
-    private void ToggleDarkMode() => _isDarkMode = !_isDarkMode;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        // JS interop is only available once the circuit is live, so the stored theme choice and the OS preference
+        // can only be read here — not in OnInitialized.
+        var systemPrefersDark = await _themeProvider.GetSystemPreference();
+        _isDarkMode = await ThemePreference.GetIsDarkModeAsync(systemPrefersDark);
+
+        await LoadIdentityAsync();
+        await RefreshNotificationsAsync();
+
+        StateHasChanged();
+    }
+
+    private async Task LoadIdentityAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+
+        _authenticated = state.User.Identity?.IsAuthenticated == true;
+        _email = state.User.FindFirst(ClaimTypes.Email)?.Value;
+    }
+
+    private async Task RefreshNotificationsAsync()
+    {
+        if (!_authenticated)
+        {
+            return;
+        }
+        await Notifications.RefreshAsync();
+    }
+
+    private async Task ToggleDarkModeAsync() =>
+        _isDarkMode = await ThemePreference.SetIsDarkModeAsync(!_isDarkMode);
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private void OnQuickSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(_quickSearch))
+        {
+            return;
+        }
+
+        // The term travels in the query string so the results page is shareable and survives a reload.
+        Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_quickSearch.Trim())}");
+        _quickSearch = null;
+    }
+
+    private async Task LogoutAsync()
+    {
+        await AuthApi.LogoutAsync();
+        Notifications.SetUnreadCount(0);
+        Snackbar.Add("You have been signed out.", Severity.Success);
+
+        // forceLoad:true deliberately. A client-side hop would keep this circuit — and every service holding
+        // the previous user's cached data — alive on the login page. A full reload guarantees the next user
+        // starts from a genuinely empty state, which matters on a shared machine.
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private void RecoverFromError() => _errorBoundary?.Recover();
+
+    private void OnNotificationsChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        _ = InvokeAsync(RefreshNotificationsAsync);
+
+    public void Dispose()
+    {
+        // Both subscriptions outlive a single render, so failing to detach them would leak this layout for the
+        // lifetime of the circuit and fire StateHasChanged on a disposed component.
+        Notifications.Changed -= OnNotificationsChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
 }

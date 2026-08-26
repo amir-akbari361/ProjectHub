@@ -1,0 +1,17 @@
+@using ProjectHub.Domain.Enums
+
+@* Status chip for a PROJECT. A tiny component, but it centralises the Active→Success / Archived→neutral
+   mapping that three separate pages had each re-derived inline with their own ternary. *@
+
+<MudChip T="string" Size="@Size" Variant="Variant.Filled"
+         Color="@(Status == ProjectStatus.Active ? Color.Success : Color.Default)">
+    @Status
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectStatus Status { get; set; }
+
+    [Parameter]
+    public Size Size { get; set; } = Size.Small;
+}

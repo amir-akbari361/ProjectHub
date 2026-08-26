@@ -1,0 +1,61 @@
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Models
+@inject NavigationManager Nav
+
+@*
+    PROJECT CARD — one project as a clickable tile.
+
+    Rendered identically by the Dashboard's "recent projects" grid and the Projects page's full grid. The two
+    were byte-for-byte duplicates apart from the enum being fully qualified in one of them, which is exactly
+    the kind of copy that rots: a change to the card (say, showing task counts) would have to be made twice
+    and inevitably would not be.
+
+    Navigation is owned here rather than passed in as a callback. The destination is a pure function of the
+    project — every caller wants "open this project" — so a required OnClick parameter would be ceremony that
+    each page satisfies with the same line.
+*@
+
+<MudPaper Class="ph-card ph-card-hover pa-4" Elevation="0"
+          role="link"
+          tabindex="0"
+          aria-label="@($"Open project {Project.Name}")"
+          @onclick="Open"
+          @onkeydown="OnKeyDown">
+    <div class="d-flex align-center justify-space-between mb-2 gap-2">
+        <MudText Typo="Typo.h6" Style="font-weight:700; overflow-wrap:anywhere;">@Project.Name</MudText>
+        <ProjectStatusChip Status="Project.Status" />
+    </div>
+
+    @* min-height keeps every card in a row the same height whether or not it has a description, so the
+       grid stays on a clean baseline instead of ragged. *@
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3" Style="min-height:40px;">
+        @(string.IsNullOrWhiteSpace(Project.Description) ? "No description" : Project.Description)
+    </MudText>
+
+    <div class="d-flex align-center justify-space-between">
+        <div class="d-flex align-center">
+            <MudIcon Icon="@Icons.Material.Outlined.Group" Size="Size.Small" Class="mr-1" />
+            <MudText Typo="Typo.caption">@Project.MemberCount @(Project.MemberCount == 1 ? "member" : "members")</MudText>
+        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            @Project.CreatedAtUtc.ToLocalTime().ToString("d MMM yyyy")
+        </MudText>
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProjectListItem Project { get; set; } = null!;
+
+    private void Open() => Nav.NavigateTo($"/projects/{Project.Id}");
+
+    // A div with @onclick is invisible to the keyboard. Adding role/tabindex above puts the card in the tab
+    // order; this handler gives it the Enter/Space activation a real link or button would have had for free.
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            Open();
+        }
+    }
+}
