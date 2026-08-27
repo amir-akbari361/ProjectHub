@@ -34,9 +34,13 @@ internal sealed class LocalFileStorage : IFileStorage
 
         // Resolve a relative root against the app base directory so the same config works under
         // `dotnet run` and in a published/container layout. An absolute path is honoured as-is.
-        _root = Path.IsPathRooted(configured)
-            ? configured
-            : Path.Combine(AppContext.BaseDirectory, configured);
+        // Path.GetFullPath canonicalises separators to the OS form (and collapses any './..'): a
+        // configured value like "storage/attachments" would otherwise keep its forward slash on
+        // Windows, so the backslash path produced by ToAbsolute would fail the confinement check.
+        _root = Path.GetFullPath(
+            Path.IsPathRooted(configured)
+                ? configured
+                : Path.Combine(AppContext.BaseDirectory, configured));
 
         // Ensure the root exists once, at construction (singleton), rather than on every save. Idempotent.
         Directory.CreateDirectory(_root);

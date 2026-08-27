@@ -1,0 +1,246 @@
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@using ProjectHub.Web.Client.State
+@implements IDisposable
+@inject NotificationsApiClient NotificationsApi
+@inject NotificationState NotificationBadge
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+@* The app-bar bell rendered as a DROPDOWN rather than a link to /notifications. A glance-sized peek at the
+   most recent items — mark one read, mark all read, or jump to the full inbox — without leaving the page.
+
+   Load is deferred to OnOpenChanged(true): the list costs a round-trip, and a bell that is never opened should
+   never pay it. MudMenu owns its own open state (its Open property is read-only), so we watch OpenChanged for the
+   load trigger and reach for the menu's CloseMenuAsync via @ref when the footer navigates away.
+
+   The unread COUNT on the badge is the shared NotificationState — the same value the rest of the app mutates —
+   so marking something read here dims the badge everywhere at once. We subscribe to its Changed event because,
+   now that the badge lives inside this component and not the layout, nothing else will re-render it for us. *@
+
+<MudMenu @ref="_menu" OpenChanged="OnOpenChangedAsync"
+         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+         aria-label="Notifications">
+    <ActivatorContent>
+        <MudTooltip Text="@Tooltip">
+            @* Visible tracks the count so a zero-unread inbox shows a clean bell, not a "0" badge that reads as
+               an alert about nothing. The icon button carries no OnClick — the MudMenu activator owns the click. *@
+            <MudBadge Content="@NotificationBadge.UnreadCount"
+                      Color="Color.Error"
+                      Overlap="true"
+                      Bordered="true"
+                      Max="99"
+                      Visible="@(NotificationBadge.UnreadCount > 0)">
+                <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
+                               Color="Color.Inherit"
+                               aria-label="@Tooltip" />
+            </MudBadge>
+        </MudTooltip>
+    </ActivatorContent>
+    <ChildContent>
+        <div class="ph-notif-menu">
+            <div class="d-flex align-center justify-space-between px-4 py-2">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:700;">Notifications</MudText>
+                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.DoneAll"
+                           Disabled="@(_working || NotificationBadge.UnreadCount == 0)"
+                           OnClick="MarkAllAsync">
+                    Mark all read
+                </MudButton>
+            </div>
+            <MudDivider />
+
+            @if (_loading)
+            {
+                <div class="d-flex justify-center py-8">
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                </div>
+            }
+            else if (_error is not null)
+            {
+                <div class="px-4 py-6">
+                    <MudText Typo="Typo.body2" Color="Color.Error">@_error</MudText>
+                </div>
+            }
+            else if (_items.Count == 0)
+            {
+                <div class="d-flex flex-column align-center gap-2 px-4 py-8">
+                    <MudIcon Icon="@Icons.Material.Outlined.NotificationsNone" Color="Color.Secondary" Size="Size.Large" />
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">You're all caught up</MudText>
+                </div>
+            }
+            else
+            {
+                <div class="ph-notif-menu-list">
+                    @foreach (var n in _items)
+                    {
+                        @* Unread rows are the only interactive ones: a click (or Enter/Space) marks them read in
+                           place and dims them, mirroring the full page. Read rows are inert and pre-dimmed. *@
+                        <div class="ph-notif-row d-flex align-center gap-3 px-4 py-3 @(n.IsRead ? null : "ph-notif-row-actionable")"
+                             @key="n.Id"
+                             style="@(n.IsRead ? "opacity:.6;" : null)"
+                             role="@(n.IsRead ? null : "button")"
+                             tabindex="@(n.IsRead ? -1 : 0)"
+                             @onclick="@(() => OnRowClickAsync(n))"
+                             @onkeydown="@(e => OnRowKeyDownAsync(e, n))">
+                            <MudIcon Icon="@NotificationVisuals.IconFor(n.Type)" Size="Size.Small"
+                                     Color="@(n.IsRead ? Color.Default : NotificationVisuals.ColorFor(n.Type))" />
+                            <div class="flex-grow-1" style="min-width:0;">
+                                <MudText Typo="Typo.body2"
+                                         Style="@(n.IsRead ? "overflow-wrap:anywhere;" : "font-weight:600;overflow-wrap:anywhere;")">
+                                    @n.Message
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @DisplayText.Humanize(n.Type) · @DisplayText.RelativeTime(n.CreatedAtUtc)
+                                </MudText>
+                            </div>
+                            @if (!n.IsRead)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.FiberManualRecord" Color="Color.Primary"
+                                         Style="font-size:.55rem;" />
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <MudDivider />
+            <div class="pa-1">
+                <MudButton Variant="Variant.Text" Color="Color.Primary" FullWidth="true"
+                           OnClick="ViewAll">
+                    View all notifications
+                </MudButton>
+            </div>
+        </div>
+    </ChildContent>
+</MudMenu>
+
+@code {
+    // The dropdown peeks at only the newest handful; the full page owns paging. Ten is enough to answer
+    // "anything new?" without turning the popover into a second inbox.
+    private const int MaxItems = 10;
+
+    private MudMenu _menu = null!;
+    // Starts true so the first paint of the popover is the spinner, never a flash of the "all caught up" empty
+    // state before OnOpenChanged has had a chance to fire the initial load.
+    private bool _loading = true;
+    private bool _working;
+    private string? _error;
+    private Guid? _busyId;
+
+    private List<NotificationItem> _items = new();
+
+    private string Tooltip => NotificationBadge.UnreadCount switch
+    {
+        0 => "Notifications",
+        1 => "1 unread notification",
+        var count => $"{count} unread notifications"
+    };
+
+    protected override void OnInitialized() =>
+        NotificationBadge.Changed += OnBadgeChanged;
+
+    private async Task OnOpenChangedAsync(bool open)
+    {
+        // Fetch fresh every time it opens. The badge count may have moved (via navigation refreshes) since the
+        // last peek, and a short list is cheap; staleness in an inbox preview is worse than a round-trip.
+        if (open)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await NotificationsApi.ListAsync(pageNumber: 1, pageSize: MaxItems, unreadOnly: false);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Failed to load notifications.";
+            _items = new();
+        }
+        else
+        {
+            _items = result.Value.Items;
+        }
+
+        _loading = false;
+    }
+
+    private async Task OnRowClickAsync(NotificationItem notification)
+    {
+        // Only unread rows do anything, and only one mark-read is in flight at a time.
+        if (notification.IsRead || _busyId is not null)
+        {
+            return;
+        }
+
+        _busyId = notification.Id;
+        var result = await NotificationsApi.MarkAsReadAsync(notification.Id);
+        _busyId = null;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to mark as read.", Severity.Error);
+            return;
+        }
+
+        // Mutate in place rather than reloading: the row stays where it is and simply changes weight, and the
+        // shared count drops by one — which re-renders the badge here and anywhere else that reads it.
+        notification.IsRead = true;
+        notification.ReadAtUtc = DateTime.UtcNow;
+        NotificationBadge.SetUnreadCount(NotificationBadge.UnreadCount - 1);
+    }
+
+    private async Task OnRowKeyDownAsync(KeyboardEventArgs e, NotificationItem notification)
+    {
+        if (e.Key is "Enter" or " " or "Spacebar")
+        {
+            await OnRowClickAsync(notification);
+        }
+    }
+
+    private async Task MarkAllAsync()
+    {
+        if (_working)
+        {
+            return;
+        }
+
+        _working = true;
+        var result = await NotificationsApi.MarkAllAsReadAsync();
+        _working = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to mark all as read.", Severity.Error);
+            return;
+        }
+
+        foreach (var notification in _items)
+        {
+            notification.IsRead = true;
+            notification.ReadAtUtc ??= DateTime.UtcNow;
+        }
+
+        NotificationBadge.SetUnreadCount(0);
+    }
+
+    private async Task ViewAll()
+    {
+        // Close before navigating: this component lives in the layout and survives the hop, so the popover would
+        // otherwise linger open over the destination page. MudMenu owns its open state (Open is read-only), so we
+        // close it through its imperative API rather than a bound flag.
+        await _menu.CloseMenuAsync();
+        Nav.NavigateTo("/notifications");
+    }
+
+    private void OnBadgeChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => NotificationBadge.Changed -= OnBadgeChanged;
+}

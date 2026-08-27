@@ -66,21 +66,7 @@
 
         @if (_authenticated)
         {
-            <MudTooltip Text="@NotificationTooltip">
-                @* Visible is bound to the count so a zero-unread inbox shows a clean bell rather than a "0" badge,
-                   which reads as an alert about nothing. *@
-                <MudBadge Content="@Notifications.UnreadCount"
-                          Color="Color.Error"
-                          Overlap="true"
-                          Bordered="true"
-                          Max="99"
-                          Visible="@(Notifications.UnreadCount > 0)">
-                    <MudIconButton Icon="@Icons.Material.Outlined.Notifications"
-                                   Color="Color.Inherit"
-                                   aria-label="@NotificationTooltip"
-                                   OnClick="@(() => Nav.NavigateTo("/notifications"))" />
-                </MudBadge>
-            </MudTooltip>
+            <NotificationsMenu />
 
             <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit"
                      AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
@@ -150,13 +136,6 @@
     // single frame while <RedirectToLogin> bounces an anonymous visitor to /login — and during that frame the
     // notification badge must NOT fire a request that can only come back 401, nor render "Signed in as Unknown".
     private bool _authenticated;
-
-    private string NotificationTooltip => Notifications.UnreadCount switch
-    {
-        0 => "Notifications",
-        1 => "1 unread notification",
-        var count => $"{count} unread notifications"
-    };
 
     protected override async Task OnInitializedAsync()
     {

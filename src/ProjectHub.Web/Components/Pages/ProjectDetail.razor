@@ -9,6 +9,7 @@
 @using ApiProjectDetail = ProjectHub.Web.Client.Models.ProjectDetail
 @inject ProjectsApiClient ProjectsApi
 @inject TasksApiClient TasksApi
+@inject SprintsApiClient SprintsApi
 @inject MembersApiClient MembersApi
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
@@ -181,6 +182,85 @@ else if (_project is not null)
             </div>
         </MudTabPanel>
 
+        <MudTabPanel Text="@SprintsTabLabel" Icon="@Icons.Material.Filled.Timelapse">
+            <div class="pa-4">
+                @if (_canContribute && !_archived)
+                {
+                    <div class="d-flex justify-end mb-3">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   OnClick="OpenNewSprintDialog">
+                            New Sprint
+                        </MudButton>
+                    </div>
+                }
+
+                @if (_sprintsLoading)
+                {
+                    <ListSkeleton Count="3" />
+                }
+                else if (_sprints.Count == 0)
+                {
+                    <EmptyState Icon="@Icons.Material.Outlined.Timelapse"
+                                Title="No sprints yet"
+                                Message="Create a sprint to plan a block of work between a start and end date."
+                                IconFontSize="3rem" />
+                }
+                else
+                {
+                    <MudStack Spacing="2">
+                        @foreach (var sprint in _sprints)
+                        {
+                            <MudPaper Class="ph-card pa-3" Elevation="0" @key="sprint.Id">
+                                <div class="d-flex align-center gap-3">
+                                    <div class="ph-accent-bar"
+                                         style="@($"background-color:{ProjectHubTheme.SprintStatusColor(sprint.Status)};")"></div>
+
+                                    <div class="flex-grow-1" style="min-width:0;">
+                                        <MudText Typo="Typo.subtitle1" Style="font-weight:600; overflow-wrap:anywhere;">
+                                            @sprint.Name
+                                        </MudText>
+                                        <div class="d-flex align-center flex-wrap gap-2 mt-2">
+                                            <SprintStatusChip Status="sprint.Status" />
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                                                     Icon="@Icons.Material.Outlined.DateRange">
+                                                @DisplayText.DateRange(sprint.StartUtc, sprint.EndUtc)
+                                            </MudChip>
+                                        </div>
+                                    </div>
+
+                                    @* Status-gated lifecycle actions, mirroring the server's allowed transitions so the
+                                       page never offers a button whose only outcome is a 409: Planned → Start,
+                                       Active → Complete, Completed → nothing. *@
+                                    @if (_canContribute && !_archived)
+                                    {
+                                        @if (sprint.Status == SprintStatus.Planned)
+                                        {
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.PlayArrow"
+                                                       Disabled="_sprintActionInFlight"
+                                                       OnClick="@(() => StartSprintAsync(sprint))">
+                                                Start
+                                            </MudButton>
+                                        }
+                                        else if (sprint.Status == SprintStatus.Active)
+                                        {
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.Check"
+                                                       Disabled="_sprintActionInFlight"
+                                                       OnClick="@(() => CompleteSprintAsync(sprint))">
+                                                Complete
+                                            </MudButton>
+                                        }
+                                    }
+                                </div>
+                            </MudPaper>
+                        }
+                    </MudStack>
+                }
+            </div>
+        </MudTabPanel>
+
         <MudTabPanel Text="@MembersTabLabel" Icon="@Icons.Material.Filled.People">
             <div class="pa-4">
                 <ProjectMembersPanel ProjectId="ProjectId"
@@ -272,6 +352,41 @@ else if (_project is not null)
     </DialogActions>
 </MudDialog>
 
+<MudDialog @bind-Visible="_newSprintOpen" Options="DialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6"><MudIcon Icon="@Icons.Material.Outlined.Add" Class="mr-2" />New Sprint</MudText>
+    </TitleContent>
+    <DialogContent>
+        @* A sprint is a named window of work: a name plus a start and end date. It is created Planned and
+           moved through its lifecycle afterwards via the Start/Complete actions on the row, so creation stays
+           one atomic command — the same separation the API and the Tasks dialog model. *@
+        <EditForm Model="_newSprint" OnValidSubmit="CreateSprintAsync" id="new-sprint-form">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="_newSprint.Name" For="@(() => _newSprint.Name)"
+                          Label="Name" Variant="Variant.Outlined" Immediate="true"
+                          Class="mb-3" MaxLength="200" Counter="200" />
+
+            <MudDatePicker @bind-Date="_newSprint.StartDate" For="@(() => _newSprint.StartDate)"
+                           Label="Start date" Variant="Variant.Outlined" Class="mb-3" />
+
+            <MudDatePicker @bind-Date="_newSprint.EndDate" For="@(() => _newSprint.EndDate)"
+                           Label="End date" Variant="Variant.Outlined" />
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _newSprintOpen = false)" Disabled="_saving">Cancel</MudButton>
+        <MudButton ButtonType="ButtonType.Submit" form="new-sprint-form"
+                   Variant="Variant.Filled" Color="Color.Primary" Disabled="_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Create
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
 @* Rendered ONCE, outside the task loop and outside the tab strip, then re-pointed at whichever task the user
    opens. One instance means one set of comment/attachment state to reason about; a drawer per row would create N
    idle components each holding their own copy. Placing it here (a sibling of the dialogs, not inside a tab panel)
@@ -288,8 +403,11 @@ else if (_project is not null)
 
     private const int TaskPageSize = 20;
 
-    /// <summary>Zero-based index of the Activity tab, used to detect its first open.</summary>
-    private const int ActivityTabIndex = 2;
+    /// <summary>
+    /// Zero-based index of the Activity tab, used to detect its first open. Bumped from 2 to 3 when the
+    /// Sprints tab was inserted at index 1 (Tasks 0, Sprints 1, Members 2, Activity 3).
+    /// </summary>
+    private const int ActivityTabIndex = 3;
 
     private static readonly DialogOptions DialogOptions = new()
     {
@@ -327,10 +445,18 @@ else if (_project is not null)
     private bool _newTaskOpen;
     private readonly NewTaskModel _newTask = new();
 
+    private bool _sprintsLoading;
+    private bool _sprintActionInFlight;
+    private List<SprintItem> _sprints = new();
+    private bool _newSprintOpen;
+    private readonly NewSprintModel _newSprint = new();
+
     private TaskItem? _selectedTask;
     private bool _taskDrawerOpen;
 
     private string TasksTabLabel => _totalTasks == 0 ? "Tasks" : $"Tasks ({_totalTasks})";
+
+    private string SprintsTabLabel => _sprints.Count == 0 ? "Sprints" : $"Sprints ({_sprints.Count})";
 
     private string MembersTabLabel => _members.Count == 0 ? "Members" : $"Members ({_members.Count})";
 
@@ -360,6 +486,39 @@ else if (_project is not null)
             Title = string.Empty;
             Description = null;
             Priority = TaskPriority.Medium;
+        }
+    }
+
+    private sealed class NewSprintModel : IValidatableObject
+    {
+        [Required(ErrorMessage = "A sprint name is required")]
+        [StringLength(200, ErrorMessage = "Name cannot exceed 200 characters")]
+        public string Name { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "A start date is required")]
+        public DateTime? StartDate { get; set; }
+
+        [Required(ErrorMessage = "An end date is required")]
+        public DateTime? EndDate { get; set; }
+
+        // Cross-field rule the per-property attributes cannot express. Runs on submit alongside the
+        // [Required]s and surfaces its message on the end-date field. Mirrors the server's own guard
+        // (CreateSprintValidator: EndUtc > StartUtc) so the bad range is caught before the round-trip.
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (StartDate is { } start && EndDate is { } end && end.Date <= start.Date)
+            {
+                yield return new ValidationResult(
+                    "The end date must be after the start date.",
+                    new[] { nameof(EndDate) });
+            }
+        }
+
+        public void Reset()
+        {
+            Name = string.Empty;
+            StartDate = null;
+            EndDate = null;
         }
     }
 
@@ -419,8 +578,9 @@ else if (_project is not null)
         // Independent reads, issued together rather than in sequence.
         var membersTask = MembersApi.ListAsync(ProjectId);
         var tasksTask = LoadTasksAsync();
+        var sprintsTask = LoadSprintsAsync();
 
-        await Task.WhenAll(membersTask, tasksTask);
+        await Task.WhenAll(membersTask, tasksTask, sprintsTask);
 
         ApplyMembers(await membersTask);
 
@@ -607,6 +767,93 @@ else if (_project is not null)
         // staying there would look like the create silently failed.
         _taskPage = 1;
         await LoadTasksAsync();
+    }
+
+    private async Task LoadSprintsAsync()
+    {
+        _sprintsLoading = true;
+
+        var result = await SprintsApi.ListAsync(ProjectId);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            // A snackbar, not the page-level _error: the header, tasks, members and activity are all still
+            // usable, so a failed sprint list should not blank the whole project view.
+            Snackbar.Add(result.Error ?? "Failed to load sprints.", Severity.Error);
+            _sprints = new();
+        }
+        else
+        {
+            _sprints = result.Value;
+        }
+
+        _sprintsLoading = false;
+    }
+
+    private void OpenNewSprintDialog()
+    {
+        _newSprint.Reset();
+        _newSprintOpen = true;
+    }
+
+    private async Task CreateSprintAsync()
+    {
+        _saving = true;
+
+        // The pickers yield a kind-less calendar date. Pin each to UTC midnight so the wire value is an
+        // unambiguous 'Z' instant — exactly what the server re-stamps before building the DateRange — and no
+        // local-time drift can move a boundary onto an adjacent day. .Value is safe: [Required] ran first.
+        var startUtc = DateTime.SpecifyKind(_newSprint.StartDate!.Value.Date, DateTimeKind.Utc);
+        var endUtc = DateTime.SpecifyKind(_newSprint.EndDate!.Value.Date, DateTimeKind.Utc);
+
+        var result = await SprintsApi.CreateAsync(
+            ProjectId, new CreateSprintRequest(_newSprint.Name.Trim(), startUtc, endUtc));
+
+        _saving = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to create the sprint.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Sprint created.", Severity.Success);
+        _newSprintOpen = false;
+        await LoadSprintsAsync();
+    }
+
+    private async Task StartSprintAsync(SprintItem sprint)
+    {
+        // Guard against a double-click racing two Start calls; the second would 409 on the server anyway,
+        // but disabling the buttons while one is in flight keeps the UI honest.
+        _sprintActionInFlight = true;
+        var result = await SprintsApi.StartAsync(sprint.Id);
+        _sprintActionInFlight = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to start the sprint.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Sprint started.", Severity.Success);
+        await LoadSprintsAsync();
+    }
+
+    private async Task CompleteSprintAsync(SprintItem sprint)
+    {
+        _sprintActionInFlight = true;
+        var result = await SprintsApi.CompleteAsync(sprint.Id);
+        _sprintActionInFlight = false;
+
+        if (!result.IsSuccess)
+        {
+            Snackbar.Add(result.Error ?? "Failed to complete the sprint.", Severity.Error);
+            return;
+        }
+
+        Snackbar.Add("Sprint completed.", Severity.Success);
+        await LoadSprintsAsync();
     }
 
     private void OpenTaskDrawer(TaskItem task)

@@ -68,8 +68,8 @@ else
                list can be triaged without reading every line. *@
             <MudPaper Class="ph-card pa-4 d-flex align-center gap-3" Elevation="0" @key="notification.Id"
                       Style="@(notification.IsRead ? "opacity:.65;" : null)">
-                <MudIcon Icon="@IconFor(notification.Type)"
-                         Color="@(notification.IsRead ? Color.Default : ColorFor(notification.Type))" />
+                <MudIcon Icon="@NotificationVisuals.IconFor(notification.Type)"
+                         Color="@(notification.IsRead ? Color.Default : NotificationVisuals.ColorFor(notification.Type))" />
 
                 <div class="flex-grow-1" style="min-width:0;">
                     <MudText Typo="Typo.body1" Style="@(notification.IsRead ? null : "font-weight:600;")">
@@ -214,27 +214,4 @@ else
         Snackbar.Add("All notifications marked as read.", Severity.Success);
         await LoadAsync();
     }
-
-    /// <summary>Maps a notification type to a representative icon so the list scans by shape, not just text.</summary>
-    private static string IconFor(NotificationType type) => type switch
-    {
-        NotificationType.TaskAssigned => Icons.Material.Filled.AssignmentInd,
-        NotificationType.TaskStatusChanged => Icons.Material.Filled.SwapHoriz,
-        NotificationType.CommentAdded => Icons.Material.Filled.Comment,
-        NotificationType.MentionedInComment => Icons.Material.Filled.AlternateEmail,
-        NotificationType.ProjectInvitation => Icons.Material.Filled.GroupAdd,
-        NotificationType.SprintStarted => Icons.Material.Filled.PlayCircleOutline,
-        _ => Icons.Material.Filled.Notifications
-    };
-
-    /// <summary>
-    /// Tints an unread notification by kind. A direct mention is the one type that warrants a warning colour — it
-    /// is addressed to you personally and usually wants a reply.
-    /// </summary>
-    private static Color ColorFor(NotificationType type) => type switch
-    {
-        NotificationType.MentionedInComment => Color.Warning,
-        NotificationType.ProjectInvitation => Color.Secondary,
-        _ => Color.Primary
-    };
 }

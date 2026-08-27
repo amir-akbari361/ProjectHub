@@ -134,4 +134,25 @@ public static class DisplayText
 
         return utc.ToLocalTime().ToString("d MMM yyyy");
     }
+
+    /// <summary>
+    /// Formats a sprint-style schedule as a compact date span: "3 Sep – 17 Sep 2026", showing the year
+    /// once when both boundaries share it and spelling both out when they differ.
+    /// </summary>
+    /// <remarks>
+    /// The boundaries are treated as CALENDAR DATES — formatted from their <c>.Date</c> component with NO
+    /// local-time conversion. A sprint's schedule is a day range, not an instant; converting a UTC midnight
+    /// boundary to local time could shift it onto the previous or next day and misreport the span.
+    /// </remarks>
+    public static string DateRange(DateTime startUtc, DateTime endUtc)
+    {
+        var start = startUtc.Date;
+        var end = endUtc.Date;
+
+        var startText = start.Year == end.Year
+            ? start.ToString("d MMM")
+            : start.ToString("d MMM yyyy");
+
+        return $"{startText} – {end:d MMM yyyy}";
+    }
 }

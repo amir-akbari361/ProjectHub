@@ -142,6 +142,42 @@ public sealed class CreateTaskResult
     public string Title { get; set; } = string.Empty;
 }
 
+// ------------------------------- Sprints -------------------------------
+
+/// <summary>
+/// Request body for creating a sprint — mirrors the API's <c>CreateSprintRequest</c>. The parent project
+/// id is owned by the route, so it is NOT on the body. The two boundaries are plain <see cref="DateTime"/>s;
+/// the server coerces them to UTC before building the domain <c>DateRange</c>.
+/// </summary>
+public sealed record CreateSprintRequest(string Name, DateTime StartUtc, DateTime EndUtc);
+
+/// <summary>
+/// One row in a project's sprint list — mirrors the API's <c>SprintResponse</c>. The owned schedule is
+/// flattened to two boundaries, and <see cref="Status"/> is the domain <see cref="SprintStatus"/> enum
+/// (reused, not redeclared): the API serializes it as a NUMBER, and a numeric JSON value binds natively to
+/// the enum but would THROW into a string — the same trap documented for <see cref="SearchResult"/>.
+/// </summary>
+public sealed class SprintItem
+{
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public DateTime StartUtc { get; set; }
+    public DateTime EndUtc { get; set; }
+    public SprintStatus Status { get; set; }
+}
+
+/// <summary>
+/// The lean acknowledgement returned after a successful create — mirrors the API's
+/// <c>CreateSprintResponse</c>. Carries just the id and normalized name; the UI re-lists to render the
+/// full row (status, schedule) rather than trusting the create response to echo the whole aggregate.
+/// </summary>
+public sealed class CreateSprintResult
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
 // ------------------------------- Comments -------------------------------
 
 public sealed record AddCommentRequest(string Body);

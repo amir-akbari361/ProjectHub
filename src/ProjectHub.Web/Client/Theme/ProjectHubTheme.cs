@@ -82,4 +82,17 @@ public static class ProjectHubTheme
         Domain.Enums.TaskPriority.Low => "#10B981",
         _ => "#94A3B8"
     };
+
+    /// <summary>
+    /// Sprint lifecycle accent colours, for the thin bar on a sprint card. Deliberately the SAME three hexes
+    /// that <c>SprintStatusChip</c> resolves through the theme palette — grey while planned, blue while active,
+    /// green once completed — so the bar and the chip on the same card can never disagree about state.
+    /// </summary>
+    public static string SprintStatusColor(Domain.Enums.SprintStatus status) => status switch
+    {
+        Domain.Enums.SprintStatus.Planned => "#94A3B8",   // muted — not yet started
+        Domain.Enums.SprintStatus.Active => "#3B82F6",     // info blue — in flight
+        Domain.Enums.SprintStatus.Completed => "#10B981",  // success green — done
+        _ => "#94A3B8"
+    };
 }

@@ -57,6 +57,7 @@ builder.Services.AddHttpClient<AuthApiClient>(ConfigureApiClient);
 
 AddAuthenticatedApiClient<ProjectsApiClient>();
 AddAuthenticatedApiClient<TasksApiClient>();
+AddAuthenticatedApiClient<SprintsApiClient>();
 AddAuthenticatedApiClient<MembersApiClient>();
 AddAuthenticatedApiClient<CommentsApiClient>();
 AddAuthenticatedApiClient<AttachmentsApiClient>();

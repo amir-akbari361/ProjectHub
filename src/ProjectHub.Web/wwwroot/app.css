@@ -76,17 +76,42 @@ body {
   }
 }
 
-/* Frosted, translucent app bar that sits above a subtle brand tint. */
+/* A frosted, translucent app bar. Two separate things had to be reconciled here — both bit us in turn:
+
+   1. OUTSIDE-CLICK. backdrop-filter (like transform/filter) makes an element the containing block for its
+      position:fixed descendants. MudMenu renders its full-viewport click-away overlay INSIDE the menu — a
+      descendant of this bar — so a filter on .ph-appbar itself trapped that overlay in the app-bar strip and the
+      notification / profile dropdowns would not close on an outside click. So the filter lives on a ::before
+      layer (z-index:0, toolbar lifted above it), never on .ph-appbar: the bar creates no containing block and the
+      overlay covers the viewport. position:relative on the toolbar is safe — unlike a filter it does NOT
+      establish a containing block for fixed descendants.
+
+   2. THEME COLOUR. MudBlazor does NOT put a `.mud-theme-dark` class on any ancestor — dark mode swaps the
+      --mud-palette-* variables and nothing else (`.mud-theme-dark` is only a colour utility in MudBlazor's own
+      CSS, never a mode flag on the layout). So the old `.mud-theme-dark .ph-appbar` override never matched: with a
+      hard-coded light rgba fill, the bar became a light-grey slab in dark mode the moment the blur moved off it.
+      The fill is now derived from the theme via color-mix() over --mud-palette-appbar-background, so it tracks
+      light/dark on its own — the same #FFF / #0F172A the palette already defines, at 72% — with no dead selector. */
 .ph-appbar {
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
-  background-color: rgba(255, 255, 255, 0.72) !important;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background-color: transparent !important;
+  border-bottom: 1px solid var(--mud-palette-lines-default, rgba(148, 163, 184, 0.18));
 }
 
-.mud-theme-dark .ph-appbar {
-  background-color: rgba(15, 23, 42, 0.72) !important;
-  border-bottom: 1px solid rgba(30, 41, 59, 0.9);
+/* Lift the toolbar above the ::before frost. */
+.ph-appbar > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ph-appbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  background-color: color-mix(in srgb, var(--mud-palette-appbar-background) 72%, transparent);
+  pointer-events: none;
 }
 
 /* Gradient wordmark for the brand text. */
@@ -180,6 +205,34 @@ body {
 .ph-appbar-search {
   width: 100%;
   max-width: 320px;
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   NOTIFICATIONS MENU — the app-bar bell's dropdown: a constrained, scrollable popover of the most
+   recent notifications, distinct from the full /notifications page. UNREAD rows are pointer-interactive
+   (a click marks them read in place and lights the hover wash); read rows are inert and dimmed inline. */
+.ph-notif-menu {
+  width: 360px;
+  max-width: 92vw;
+}
+
+.ph-notif-menu-list {
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+
+.ph-notif-row {
+  transition: background-color 0.15s ease;
+}
+
+.ph-notif-row-actionable {
+  cursor: pointer;
+}
+
+.ph-notif-row-actionable:hover,
+.ph-notif-row-actionable:focus-visible {
+  background-color: var(--mud-palette-action-default-hover);
+  outline: none;
 }
 
 /* ---------------------------------------------------------------------------------------------------

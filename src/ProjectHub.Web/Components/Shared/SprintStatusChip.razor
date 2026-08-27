@@ -1,0 +1,26 @@
+@using ProjectHub.Domain.Enums
+@using ProjectHub.Web.Client.Formatting
+
+@* Status chip for a SPRINT. Colour tracks the lifecycle — grey while planned, blue while active, green
+   once completed — so a list communicates state before the label is read. Mirrors TaskStatusChip exactly,
+   differing only in the enum it maps. *@
+
+<MudChip T="string" Size="@Size" Variant="Variant.Outlined" Color="@ColorFor(Status)">
+    @DisplayText.Humanize(Status)
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public SprintStatus Status { get; set; }
+
+    [Parameter]
+    public Size Size { get; set; } = Size.Small;
+
+    private static Color ColorFor(SprintStatus status) => status switch
+    {
+        SprintStatus.Planned => Color.Default,
+        SprintStatus.Active => Color.Info,
+        SprintStatus.Completed => Color.Success,
+        _ => Color.Default
+    };
+}
