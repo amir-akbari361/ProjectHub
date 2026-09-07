@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.OpenApi.Models;
+using ProjectHub.API.Hubs;
 using ProjectHub.API.Infrastructure;
 using ProjectHub.Application;
+using ProjectHub.Application.Abstractions.Services;
 using ProjectHub.Infrastructure;
 using ProjectHub.Persistence;
 using Serilog;
@@ -48,6 +51,18 @@ try
     // single call and stays ignorant of the crypto details.
     builder.Services.AddJwtAuthentication();
 
+    // Real-time push for the notification inbox. SignalR ships in the ASP.NET Core shared framework, so
+    // this needs no package reference. Registered AFTER authentication because the hub is [Authorize]d and
+    // targets users by claim — see SubjectUserIdProvider for why that claim is pinned explicitly rather
+    // than left to the built-in provider's default.
+    builder.Services.AddSignalR();
+    builder.Services.AddSingleton<IUserIdProvider, SubjectUserIdProvider>();
+
+    // The transport half of the notification port. The Application layer raises the push (it owns the
+    // recipient and the unread count); this binds that port to the hub above. It is registered here, at
+    // the composition root, because IHubContext<NotificationHub> is a hosting type the Application and
+    // Infrastructure layers deliberately cannot see.
+    builder.Services.AddScoped<INotificationPusher, SignalRNotificationPusher>();
 
     // Framework-native exception handling: our IExceptionHandler + the built-in ProblemDetails
 
@@ -142,6 +157,11 @@ try
     // Maps attribute-routed controllers (AuthController and every feature controller to come) into
     // the pipeline. Without this the controllers exist in DI but no route reaches them.
     app.MapControllers();
+
+    // The live notification channel. Mapped AFTER UseAuthentication/UseAuthorization so the hub's
+    // [Authorize] is evaluated against a real principal at the handshake — without that ordering the hub
+    // would accept anonymous sockets that could never be addressed by user id.
+    app.MapHub<NotificationHub>("/hubs/notifications");
 
     app.Run();
 

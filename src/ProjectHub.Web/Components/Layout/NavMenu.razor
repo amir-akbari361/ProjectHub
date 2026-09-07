@@ -30,4 +30,31 @@
     <MudNavLink Href="/profile" Icon="@Icons.Material.Outlined.Person" IconColor="Color.Secondary">
         Profile
     </MudNavLink>
+
+    @* ADMINISTRATION — rendered only for holders of the global Admin role.
+
+       AuthorizeView reads the role claim from the JWT the client already holds, so this section simply is not
+       emitted for anyone else. That is a CONVENIENCE, not the control: the pages carry
+       [Authorize(Roles="Admin")] and every endpoint behind them is gated by the API's "Admin" policy, so
+       reaching /admin/users by typing the URL still gets you nothing. Hiding the section keeps the drawer
+       honest about what the current user can actually do — the same pattern the member-only actions use. *@
+    <AuthorizeView Roles="Admin">
+        <Authorized>
+            <MudDivider Class="my-3 mx-4" />
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-4 pb-1 d-block">
+                Administration
+            </MudText>
+
+            <MudNavLink Href="/admin/users" Icon="@Icons.Material.Outlined.ManageAccounts"
+                        IconColor="Color.Warning">
+                Users
+            </MudNavLink>
+
+            <MudNavLink Href="/admin/audit" Icon="@Icons.Material.Outlined.History"
+                        IconColor="Color.Warning">
+                Audit log
+            </MudNavLink>
+        </Authorized>
+    </AuthorizeView>
 </MudNavMenu>

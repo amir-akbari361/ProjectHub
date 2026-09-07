@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using MudBlazor.Services;
 using ProjectHub.Web.Client.Auth;
 using ProjectHub.Web.Client.Http;
+using ProjectHub.Web.Client.Realtime;
 using ProjectHub.Web.Client.State;
 using ProjectHub.Web.Client.Theme;
 using ProjectHub.Web.Components;
@@ -65,6 +66,10 @@ AddAuthenticatedApiClient<NotificationsApiClient>();
 AddAuthenticatedApiClient<SearchApiClient>();
 AddAuthenticatedApiClient<AuditLogsApiClient>();
 
+// Admin-only surface. Registered like any other client — the API's "Admin" policy, not this registration, is
+// what restricts it, so a non-admin circuit simply receives 403s from every call.
+AddAuthenticatedApiClient<AdminUsersApiClient>();
+
 // -------------------------------------------------------------------------------------------------
 // AUTHENTICATION STATE
 //
@@ -91,6 +96,11 @@ builder.Services.AddAuthorizationCore();
 // -------------------------------------------------------------------------------------------------
 builder.Services.AddScoped<NotificationState>();
 builder.Services.AddScoped<ThemePreferenceStore>();
+
+// The live channel that feeds NotificationState. Scoped == one connection per circuit, which is the right
+// grain: the connection is authenticated as ONE user, and the circuit's own scope disposes it (the class is
+// IAsyncDisposable) when the user closes the tab. MainLayout starts it once the user is known.
+builder.Services.AddScoped<NotificationHubClient>();
 
 // WHY REGISTER AUTHENTICATION AT ALL FOR A BEARER-ONLY SPA?
 // The Blazor router runs a framework AUTHORIZATION step for [Authorize] pages. When a user is unauthorized that

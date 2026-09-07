@@ -59,11 +59,13 @@ public sealed class LoginCommandHandler : ICommandHandler<LoginCommand, LoginRes
         //    Email.Create normalizes to lowercase and trims whitespace, matching what the DB stores.
         var email = Email.Create(request.Email);
 
-        // 2. Fetch the user by email. We need the full aggregate (with Roles loaded) because IJwtProvider
-        //    embeds role claims into the JWT. EF translates `u.Email == email` into SQL via the
-        //    HasConversion mapping in UserConfiguration, so this is a direct indexed lookup.
+        // 2. Fetch the user by email. We need the full aggregate (with Roles AND each role's name loaded)
+        //    because IJwtProvider embeds role-NAME claims into the JWT — the ThenInclude pulls the Role
+        //    navigation so "Admin" (not its id) reaches the token. EF translates `u.Email == email` into
+        //    SQL via the HasConversion mapping in UserConfiguration, so this is a direct indexed lookup.
         var user = await _context.Users
             .Include(u => u.Roles)
+                .ThenInclude(userRole => userRole.Role)
             .SingleOrDefaultAsync(u => u.Email == email, cancellationToken);
 
         // 3. Generic failure if the user doesn't exist. We return the SAME error as "wrong password" to

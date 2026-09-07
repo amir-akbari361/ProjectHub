@@ -209,6 +209,28 @@ public sealed class User : AggregateRoot
     }
 
     /// <summary>
+    /// Restores a deactivated account, letting the user sign in again. The mirror image of
+    /// <see cref="Deactivate"/>, and rejects a no-op the same way so an administrator gets a clear
+    /// "already active" answer rather than a silent success that suggests something changed.
+    /// </summary>
+    /// <remarks>
+    /// Reactivation deliberately restores ONLY the active flag. It does not re-issue credentials, confirm the
+    /// email, or revive refresh tokens: deactivation left those untouched, and any session the user held was
+    /// already rejected at login by the <c>IsActive</c> check. Anything more would be a policy decision that
+    /// belongs to the caller, not to the aggregate.
+    /// </remarks>
+    public void Reactivate(DateTime utcNow, Guid? updatedBy = null)
+    {
+        if (IsActive)
+        {
+            throw new DomainException("The user is already active.");
+        }
+
+        IsActive = true;
+        MarkUpdated(utcNow, updatedBy);
+    }
+
+    /// <summary>
     /// Issues a new refresh-token grant for this user. The caller passes the SHA-256 hash of the raw
     /// token (the raw value is generated and returned by Infrastructure and never enters the Domain).
     /// Login calls this after verifying credentials.

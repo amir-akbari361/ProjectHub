@@ -1,0 +1,378 @@
+@page "/admin/audit"
+@attribute [Authorize(Roles = "Admin")]
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject AuditLogsApiClient AuditLogsApi
+
+<PageTitle>Audit log · ProjectHub</PageTitle>
+
+@*
+    ADMIN AUDIT LOG — every recorded change, across every project, newest first.
+
+    WHY A CARD LIST RATHER THAN A TABLE
+    A row's most valuable content is the field-level diff, which is multi-line JSON of arbitrary width. In a
+    table that either blows the column widths out or hides behind a horizontal scrollbar; as a card it can
+    expand in place. This also keeps the page in the same visual language as the rest of the app, which has no
+    tables anywhere.
+
+    WHY FILTERS RE-QUERY INSTEAD OF FILTERING THE LOADED PAGE
+    The trail is unbounded and paged server-side, so narrowing in the browser would only filter the twenty rows
+    that happen to be loaded while the pager kept describing the unfiltered set. Every filter change therefore
+    refetches from page 1 — the same choice the notifications inbox makes.
+
+    WHY THE PROJECT AND ACTOR FILTERS HAVE NO DROPDOWN
+    Both are ids, and there is deliberately no "all projects"/"all users" list an Admin can browse here (Admin's
+    reach is oversight, not membership). Typing a GUID is not a usable filter, so instead each row's project and
+    actor are BUTTONS that filter by that value — discovery happens through the data itself.
+*@
+
+<PageHeader Title="Audit log" Subtitle="Every recorded change, across all projects">
+    <Actions>
+        @if (HasFilters)
+        {
+            <MudButton Variant="Variant.Text" Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.FilterAltOff"
+                       OnClick="ClearFiltersAsync"
+                       Disabled="_loading">
+                Clear filters
+            </MudButton>
+        }
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="@(() => LoadPageAsync(_pageNumber))"
+                   Disabled="_loading">
+            Refresh
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<MudPaper Class="ph-card pa-4 mb-4" Elevation="0">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="4">
+            <MudSelect T="AuditedEntity?" Value="_entity" Label="Entity type"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                       ValueChanged="OnEntityChangedAsync" Clearable="true">
+                <MudSelectItem T="AuditedEntity?" Value="@((AuditedEntity?)null)">All types</MudSelectItem>
+                @foreach (var entity in Enum.GetValues<AuditedEntity>())
+                {
+                    <MudSelectItem T="AuditedEntity?" Value="@entity">@DisplayText.Humanize(entity)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        @* Labelled UTC deliberately: audit timestamps are stored in UTC and the range is applied against them
+           verbatim. Silently reinterpreting a picked date in the browser's zone would shift the window by up to
+           a day at the boundaries — worse than asking the reader to think in the same units as the data. *@
+        <MudItem xs="12" sm="4">
+            <MudDatePicker Date="_fromDate" Label="From (UTC)"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Clearable="true" DateChanged="OnFromChangedAsync" />
+        </MudItem>
+
+        <MudItem xs="12" sm="4">
+            <MudDatePicker Date="_toDate" Label="To (UTC)"
+                           Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Clearable="true" DateChanged="OnToChangedAsync" />
+        </MudItem>
+    </MudGrid>
+
+    @if (_projectFilter is not null || _performerFilter is not null)
+    {
+        <div class="d-flex align-center gap-2 flex-wrap mt-3">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Filtered to:</MudText>
+
+            @if (_projectFilter is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                         OnClose="@(() => ClearProjectFilterAsync())">
+                    Project: @(_projectFilterLabel ?? _projectFilter.ToString())
+                </MudChip>
+            }
+
+            @if (_performerFilter is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined"
+                         OnClose="@(() => ClearPerformerFilterAsync())">
+                    By: @(_performerFilterLabel ?? _performerFilter.ToString())
+                </MudChip>
+            }
+        </div>
+    }
+</MudPaper>
+
+@if (_loading)
+{
+    <ListSkeleton Count="6" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_entries.Count == 0)
+{
+    <EmptyState Icon="@Icons.Material.Outlined.History"
+                Title="@(HasFilters ? "No matching activity" : "No recorded activity")"
+                Message="@(HasFilters
+                    ? "No changes match these filters. Try widening the range or clearing them."
+                    : "Changes across the workspace will appear here as they happen.")" />
+}
+else
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+        @_totalCount recorded @(_totalCount == 1 ? "change" : "changes")
+    </MudText>
+
+    <div class="d-flex flex-column gap-2">
+        @foreach (var entry in _entries)
+        {
+            <MudPaper Class="ph-card pa-3" Elevation="0" @key="entry.Id">
+                <div class="d-flex align-center justify-space-between gap-2 flex-wrap">
+                    <div class="d-flex align-center gap-2 flex-wrap">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                                 Color="@ActionColor(entry.Action)">
+                            @DisplayText.Humanize(entry.Action)
+                        </MudChip>
+
+                        <MudText Typo="Typo.body2" Style="font-weight:600;">
+                            @DisplayText.Humanize(entry.EntityName)
+                        </MudText>
+
+                        @* The entity id is shown truncated: enough to correlate two rows about the same record
+                           at a glance, with the full value available on hover for copying into a query. *@
+                        <MudTooltip Text="@entry.EntityId.ToString()">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ph-mono">
+                                @ShortId(entry.EntityId)
+                            </MudText>
+                        </MudTooltip>
+                    </div>
+
+                    <MudTooltip Text="@($"{entry.CreatedAtUtc.ToLocalTime():f} (local)")">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @DisplayText.RelativeTime(entry.CreatedAtUtc)
+                        </MudText>
+                    </MudTooltip>
+                </div>
+
+                <div class="d-flex align-center gap-1 flex-wrap mt-1">
+                    @if (entry.ProjectId is { } projectId)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Outlined.FolderOpen"
+                                   OnClick="@(() => FilterByProjectAsync(projectId, entry.ProjectName))">
+                            @(entry.ProjectName ?? ShortId(projectId))
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">No project</MudText>
+                    }
+
+                    @if (entry.PerformedBy is { } performedBy)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Outlined.Person"
+                                   OnClick="@(() => FilterByPerformerAsync(performedBy, entry.PerformedByEmail))">
+                            @(entry.PerformedByEmail ?? ShortId(performedBy))
+                        </MudButton>
+                    }
+                    else
+                    {
+                        @* No actor means the change was not made through an authenticated request — the seeder
+                           or a system process. Saying "System" is more truthful than an empty cell. *@
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-2">by System</MudText>
+                    }
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(entry.Changes))
+                {
+                    @* Free-form JSON written by the audit interceptor. Collapsed because it is diagnostic
+                       detail, and rendered as escaped TEXT inside <pre> — never as markup — because it embeds
+                       user-supplied field values. *@
+                    <MudExpansionPanels Elevation="0" Class="mt-2">
+                        <MudExpansionPanel Text="Details" Dense="true" Class="ph-activity-details">
+                            <pre class="ph-activity-json">@entry.Changes</pre>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                }
+            </MudPaper>
+        }
+    </div>
+
+    @if (_totalPages > 1)
+    {
+        <div class="d-flex justify-center mt-4">
+            <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_pageNumber"
+                           SelectedChanged="LoadPageAsync" />
+        </div>
+    }
+}
+
+@code {
+    private const int PageSize = 20;
+
+    private List<AdminAuditLogItem> _entries = new();
+    private bool _loading = true;
+    private string? _error;
+    private int _pageNumber = 1;
+    private int _totalPages;
+    private int _totalCount;
+
+    private AuditedEntity? _entity;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private Guid? _projectFilter;
+    private string? _projectFilterLabel;
+    private Guid? _performerFilter;
+    private string? _performerFilterLabel;
+
+    private bool HasFilters =>
+        _entity is not null
+        || _fromDate is not null
+        || _toDate is not null
+        || _projectFilter is not null
+        || _performerFilter is not null;
+
+    protected override Task OnInitializedAsync() => LoadPageAsync(1);
+
+    private async Task LoadPageAsync(int page)
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await AuditLogsApi.ListAllAsync(
+            entity: _entity,
+            projectId: _projectFilter,
+            performedBy: _performerFilter,
+            fromUtc: StartOfDayUtc(_fromDate),
+            toUtc: EndOfDayUtc(_toDate),
+            pageNumber: page,
+            pageSize: PageSize);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Failed to load the audit log.";
+            _entries = new();
+            _totalPages = 0;
+            _totalCount = 0;
+        }
+        else
+        {
+            _entries = result.Value.Items;
+            _totalPages = result.Value.TotalPages;
+            _totalCount = result.Value.TotalCount;
+            _pageNumber = result.Value.PageNumber;
+        }
+
+        _loading = false;
+    }
+
+    // Every filter change restarts at page 1: staying on page 7 of a newly narrowed set would usually land
+    // beyond its last page and show an empty list that looks like "no results".
+    private Task OnEntityChangedAsync(AuditedEntity? entity)
+    {
+        _entity = entity;
+        return LoadPageAsync(1);
+    }
+
+    private Task OnFromChangedAsync(DateTime? date)
+    {
+        _fromDate = date;
+        return LoadPageAsync(1);
+    }
+
+    private Task OnToChangedAsync(DateTime? date)
+    {
+        _toDate = date;
+        return LoadPageAsync(1);
+    }
+
+    private Task FilterByProjectAsync(Guid projectId, string? label)
+    {
+        _projectFilter = projectId;
+        _projectFilterLabel = label;
+        return LoadPageAsync(1);
+    }
+
+    private Task FilterByPerformerAsync(Guid performedBy, string? label)
+    {
+        _performerFilter = performedBy;
+        _performerFilterLabel = label;
+        return LoadPageAsync(1);
+    }
+
+    private Task ClearProjectFilterAsync()
+    {
+        _projectFilter = null;
+        _projectFilterLabel = null;
+        return LoadPageAsync(1);
+    }
+
+    private Task ClearPerformerFilterAsync()
+    {
+        _performerFilter = null;
+        _performerFilterLabel = null;
+        return LoadPageAsync(1);
+    }
+
+    private Task ClearFiltersAsync()
+    {
+        _entity = null;
+        _fromDate = null;
+        _toDate = null;
+        _projectFilter = null;
+        _projectFilterLabel = null;
+        _performerFilter = null;
+        _performerFilterLabel = null;
+        return LoadPageAsync(1);
+    }
+
+    /// <summary>
+    /// Turns a picked date into the inclusive START of that UTC day. The picker yields a local-kind value with
+    /// no time component; stamping it as UTC keeps the round-trip format unambiguous on the wire.
+    /// </summary>
+    private static DateTime? StartOfDayUtc(DateTime? date) =>
+        date is { } value ? DateTime.SpecifyKind(value.Date, DateTimeKind.Utc) : null;
+
+    /// <summary>
+    /// Turns a picked date into the inclusive END of that UTC day. Without this a "to 27 August" filter would
+    /// compare against midnight and exclude everything that happened during the 27th.
+    /// </summary>
+    private static DateTime? EndOfDayUtc(DateTime? date) =>
+        date is { } value
+            ? DateTime.SpecifyKind(value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc)
+            : null;
+
+    /// <summary>First segment of a GUID — enough to correlate rows visually, with the full value on hover.</summary>
+    private static string ShortId(Guid id) => id.ToString()[..8];
+
+    /// <summary>
+    /// Colours the action by the KIND of change so a long trail can be skimmed for destructive entries. Matched
+    /// on substrings because the action is a free-form string written by the writer, not a closed enum.
+    /// Mirrors ProjectActivityPanel so the same change reads the same colour in both views.
+    /// </summary>
+    private static Color ActionColor(string action)
+    {
+        if (action.Contains("Delete", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Remove", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Archive", StringComparison.OrdinalIgnoreCase))
+        {
+            return Color.Error;
+        }
+
+        if (action.Contains("Create", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Add", StringComparison.OrdinalIgnoreCase))
+        {
+            return Color.Success;
+        }
+
+        if (action.Contains("Update", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Change", StringComparison.OrdinalIgnoreCase)
+            || action.Contains("Edit", StringComparison.OrdinalIgnoreCase))
+        {
+            return Color.Info;
+        }
+
+        return Color.Default;
+    }
+}

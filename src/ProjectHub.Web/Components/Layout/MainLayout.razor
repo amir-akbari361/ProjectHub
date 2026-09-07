@@ -3,10 +3,12 @@
 @using System.Security.Claims
 @using ProjectHub.Web.Client.Auth
 @using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Realtime
 @using ProjectHub.Web.Client.State
 @using ProjectHub.Web.Client.Theme
 @inject AuthApiClient AuthApi
 @inject NotificationState Notifications
+@inject NotificationHubClient NotificationHub
 @inject ThemePreferenceStore ThemePreference
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
@@ -145,7 +147,12 @@
 
         // The badge is chrome on every page, so it must refresh as the user moves around. Subscribing to
         // navigation is what keeps it accurate without a polling timer; see NotificationState for that trade-off.
+        // With the hub connected this is belt-and-braces rather than the primary path — deliberately kept, because
+        // it is also the ONLY thing keeping the badge honest when the hub cannot connect at all.
         Nav.LocationChanged += OnLocationChanged;
+
+        // Toasts for pushed notifications. Subscribed before the connection is started so no early push is missed.
+        NotificationHub.Received += OnNotificationPushed;
 
         await LoadIdentityAsync();
     }
@@ -165,6 +172,11 @@
         await LoadIdentityAsync();
         await RefreshNotificationsAsync();
 
+        // Only AFTER the identity is known: the hub handshake carries the user's token, so starting it for an
+        // anonymous visitor would just be a rejected connection. Started here rather than in OnInitializedAsync
+        // because the token lives in localStorage, which needs a live circuit to read.
+        await StartNotificationHubAsync();
+
         StateHasChanged();
     }
 
@@ -183,6 +195,17 @@
             return;
         }
         await Notifications.RefreshAsync();
+    }
+
+    private async Task StartNotificationHubAsync()
+    {
+        if (!_authenticated)
+        {
+            return;
+        }
+
+        // Never throws — a hub that cannot connect logs and leaves the app in its non-real-time mode.
+        await NotificationHub.StartAsync();
     }
 
     private async Task ToggleDarkModeAsync() =>
@@ -218,14 +241,35 @@
 
     private void OnNotificationsChanged() => InvokeAsync(StateHasChanged);
 
+    // Fired from a SignalR callback on a thread-pool thread, so EVERY line of UI work here has to be marshalled
+    // onto the circuit's synchronisation context. Calling Snackbar.Add directly from that thread would mutate the
+    // provider's state off the renderer's context — the toast may not appear, or the render can fault.
+    // The badge itself needs nothing here: the hub client has already set the count, and NotificationState.Changed
+    // re-renders it through OnNotificationsChanged above.
+    private void OnNotificationPushed(NotificationPush push) =>
+        _ = InvokeAsync(() => Snackbar.Add(push.Message, Severity.Info, config =>
+        {
+            config.Icon = Icons.Material.Outlined.Notifications;
+
+            // Clicking the toast is the shortest path from "something happened" to the inbox that explains it.
+            // NOTE: MudBlazor spells this "Onclick" (lowercase c) — unlike the OnClick parameter on components.
+            config.Onclick = _ =>
+            {
+                Nav.NavigateTo("/notifications");
+                return Task.CompletedTask;
+            };
+        }));
+
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
         _ = InvokeAsync(RefreshNotificationsAsync);
 
     public void Dispose()
     {
-        // Both subscriptions outlive a single render, so failing to detach them would leak this layout for the
-        // lifetime of the circuit and fire StateHasChanged on a disposed component.
+        // Every subscription outlives a single render, so failing to detach them would leak this layout for the
+        // lifetime of the circuit and fire StateHasChanged on a disposed component. The hub CONNECTION itself is
+        // not disposed here — it is a circuit-scoped service, so DI tears it down when the circuit ends.
         Notifications.Changed -= OnNotificationsChanged;
         Nav.LocationChanged -= OnLocationChanged;
+        NotificationHub.Received -= OnNotificationPushed;
     }
 }

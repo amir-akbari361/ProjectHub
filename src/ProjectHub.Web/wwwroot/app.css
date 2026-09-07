@@ -367,6 +367,13 @@ body {
   background-color: rgba(15, 23, 42, 0.75);
 }
 
+/* Inline monospace for identifier fragments (a truncated GUID in the audit log). Tabular figures keep a
+   column of ids visually aligned so two rows about the same record are easy to spot while skimming. */
+.ph-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
 /* A thin colored accent bar used on the left of cards to show priority. */
 .ph-accent-bar {
   width: 4px;

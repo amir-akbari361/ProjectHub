@@ -26,10 +26,11 @@ public static class DependencyInjection
             ?? throw new InvalidOperationException(
                 "Connection string 'Database' was not found. Configure it in appsettings or the environment.");
 
-        // Interceptors carry scoped dependencies (IDateTimeProvider, IPublisher), so they must be
-        // registered in the container rather than newed up — otherwise those dependencies could not
-        // be injected and their lifetimes would not be honoured.
+        // Interceptors carry scoped dependencies (IDateTimeProvider, IPublisher, ICurrentUser), so they
+        // must be registered in the container rather than newed up — otherwise those dependencies could
+        // not be injected and their lifetimes would not be honoured.
         services.AddScoped<SoftDeleteInterceptor>();
+        services.AddScoped<AuditLogInterceptor>();
         services.AddScoped<PublishDomainEventsInterceptor>();
 
         services.AddDbContext<ApplicationDbContext>((serviceProvider, options) =>
@@ -46,9 +47,13 @@ public static class DependencyInjection
             });
 
             // Resolve the interceptors from the request scope so their scoped dependencies are the
-            // same instances the rest of the request uses (one clock, one MediatR publisher).
+            // same instances the rest of the request uses (one clock, one MediatR publisher, one
+            // current-user view). Order matters for the SavingChanges pass: SoftDeleteInterceptor runs
+            // first so a Remove is already rewritten to a Modified+IsDeleted update by the time
+            // AuditLogInterceptor classifies it as a "Deleted" action.
             options.AddInterceptors(
                 serviceProvider.GetRequiredService<SoftDeleteInterceptor>(),
+                serviceProvider.GetRequiredService<AuditLogInterceptor>(),
                 serviceProvider.GetRequiredService<PublishDomainEventsInterceptor>());
         });
 

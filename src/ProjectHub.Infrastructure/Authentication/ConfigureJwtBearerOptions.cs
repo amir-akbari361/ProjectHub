@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
@@ -98,11 +99,47 @@ internal sealed class ConfigureJwtBearerOptions : IConfigureNamedOptions<JwtBear
             // between services; in this single-process app clocks are synchronized by definition.
             ClockSkew = TimeSpan.Zero,
 
-            // NAME CLAIM TYPE: maps the "sub" (subject) claim to ClaimTypes.NameIdentifier, so downstream
-            // code can read the user id via User.Identity.Name or User.FindFirst(ClaimTypes.NameIdentifier)
-            // — the conventional .NET approach. Without this the "sub" would be accessible only via its
-            // raw JWT claim name, breaking framework conventions.
-            NameClaimType = "sub"
+            // NAME CLAIM TYPE: which claim supplies User.Identity.Name. We point it at "sub" (the OIDC
+            // subject) so the user id is the principal's name.
+            //
+            // NOTE ON CLAIM MAPPING: it is the handler's default inbound claim MAPPING — not this setting —
+            // that rewrites "sub" into ClaimTypes.NameIdentifier, which is the claim ICurrentUser.UserId and
+            // SignalR's SubjectUserIdProvider both read. Setting MapInboundClaims = false here would remove
+            // that claim and silently break BOTH (no user id in handlers, no notification push target), so
+            // if the raw "sub" is ever needed unmapped, update those readers in the same change.
+            NameClaimType = "sub",
+
+            // ROLE CLAIM TYPE: which claim [Authorize(Roles=...)] and IsInRole() read. This is already the
+            // handler's default, but JwtProvider emits roles under ClaimTypes.Role, so we pin it explicitly
+            // to make the sign/verify contract self-documenting — a future change to either side is an
+            // obvious break here rather than a silent authorization failure. Role evaluation is entirely
+            // independent of the name claim above, so the two concerns never interact.
+            RoleClaimType = ClaimTypes.Role
+        };
+
+        // WEBSOCKET AUTHENTICATION. The browser's WebSocket API cannot set an Authorization header, so the
+        // SignalR JS/.NET clients fall back to passing the token as an "access_token" query parameter. The
+        // bearer handler only looks at the header, so without this hook every hub handshake would arrive
+        // anonymous and the [Authorize] on NotificationHub would reject it.
+        //
+        // WHY THE PATH GUARD MATTERS: a query-string token lands in server logs, browser history, and
+        // proxy access logs far more readily than a header does. Restricting the fallback to "/hubs" means
+        // the REST surface keeps accepting the header ONLY — a leaked URL can never authenticate against
+        // /api, and the exposure is confined to the one transport that genuinely cannot do better.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                string? accessToken = context.Request.Query["access_token"];
+
+                if (!string.IsNullOrEmpty(accessToken)
+                    && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     }
 }

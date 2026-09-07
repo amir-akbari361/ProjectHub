@@ -60,6 +60,7 @@ public sealed class RefreshTokenCommandHandler : ICommandHandler<RefreshTokenCom
         //    chain if it detects a reuse attack. We match the user via .Any on the child collection.
         var user = await _context.Users
             .Include(u => u.Roles)
+                .ThenInclude(userRole => userRole.Role)
             .Include(u => u.RefreshTokens)
             .SingleOrDefaultAsync(
                 u => u.RefreshTokens.Any(t => t.TokenHash == presentedHash),

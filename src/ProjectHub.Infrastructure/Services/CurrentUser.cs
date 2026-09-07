@@ -42,4 +42,9 @@ internal sealed class CurrentUser : ICurrentUser
     // Delegates to the framework's role evaluation, which already understands role claims and
     // ClaimsIdentity.RoleClaimType — we neither re-implement nor second-guess authorization here.
     public bool IsInRole(string role) => Principal?.IsInRole(role) ?? false;
+
+    // The global Admin role. Kept as a single named check so handlers don't scatter the "Admin" literal;
+    // it reads the same role claim the "Admin" authorization policy does, so client-visible and
+    // server-side checks can never disagree about what "admin" means.
+    public bool IsAdmin => IsInRole("Admin");
 }

@@ -9,10 +9,10 @@ namespace ProjectHub.Application.Features.AuditLogs;
 /// </summary>
 /// <remarks>
 /// WHY ARE THERE SO FEW ERRORS?
-/// Audit logs have no owner authorization (any authenticated user with appropriate project membership
-/// can view logs for entities they can access), no validation (they're written by the system, not users),
-/// and no mutations. The only failure mode is "entity not found" when a caller asks for logs of a
-/// non-existent or inaccessible parent entity.
+/// Audit logs are read-scoped by project membership (or the Admin role) rather than by a per-row owner,
+/// have no validation (they're written by the system, not users), and no mutations. The only failure
+/// mode is "entity not found" — returned both when the parent entity doesn't exist and when the caller
+/// lacks access, so the two are indistinguishable to a client.
 /// </remarks>
 public static class AuditLogErrors
 {
@@ -26,4 +26,15 @@ public static class AuditLogErrors
         Error.NotFound(
             "AuditLog.EntityNotFound",
             $"No audit trail found for {entityName} with id '{entityId}'. The entity may not exist or you may lack access to it.");
+
+    /// <summary>
+    /// Returned when a non-Admin reaches the organisation-wide audit viewer. Unlike
+    /// <see cref="EntityNotFound"/> this is a deliberate 403 rather than a 404: the endpoint's existence is
+    /// not a secret (it is a documented admin feature), and there is no specific entity whose existence
+    /// could leak. Telling the caller plainly that the feature is Admin-only is more useful than pretending
+    /// the route does not exist.
+    /// </summary>
+    public static readonly Error AdminOnly = Error.Forbidden(
+        "AuditLog.AdminOnly",
+        "Only administrators can view the organisation-wide audit trail.");
 }

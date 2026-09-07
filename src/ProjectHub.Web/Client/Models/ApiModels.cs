@@ -295,3 +295,50 @@ public sealed class AuditLogItem
     public string? Changes { get; set; }
     public DateTime CreatedAtUtc { get; set; }
 }
+
+/// <summary>
+/// One row of the organisation-wide (Admin) audit trail. A superset of <see cref="AuditLogItem"/>: the server
+/// resolves the project name and performer email for this view, because a cross-project list in which every
+/// actor and project is a bare GUID cannot be read.
+/// </summary>
+/// <remarks>
+/// The resolved names are nullable on purpose — a row may have no project (the writer records it
+/// best-effort), no performer (a system or seeder change), or reference a row that has since been
+/// soft-deleted. Render a null as "unknown"/"system" rather than assuming a value.
+/// </remarks>
+public sealed class AdminAuditLogItem
+{
+    public Guid Id { get; set; }
+    public string EntityName { get; set; } = string.Empty;
+    public Guid EntityId { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public Guid? ProjectId { get; set; }
+    public string? ProjectName { get; set; }
+    public Guid? PerformedBy { get; set; }
+    public string? PerformedByEmail { get; set; }
+    public string? Changes { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+}
+
+// ------------------------------- Admin: users -------------------------------
+
+/// <summary>
+/// One account in the Admin user directory. <see cref="Roles"/> holds GLOBAL role names (Admin/Manager/Member)
+/// — not per-project roles, which are a separate concept carried by <see cref="MemberItem"/>.
+/// </summary>
+public sealed class AdminUserItem
+{
+    public Guid Id { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public bool IsEmailConfirmed { get; set; }
+    public List<string> Roles { get; set; } = new();
+    public DateTime CreatedAtUtc { get; set; }
+
+    /// <summary>Display name, assembled client-side so the response carries no redundant field.</summary>
+    public string FullName => $"{FirstName} {LastName}".Trim();
+}
+
+public sealed record AssignRoleRequest(string RoleName);

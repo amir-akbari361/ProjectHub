@@ -61,11 +61,12 @@ internal sealed class JwtProvider : IJwtProvider
 
         // Role claims drive role-based authorization ([Authorize(Roles = "Admin")]). We emit one
         // ClaimTypes.Role per assigned role; the ASP.NET Core JWT handler maps these into the
-        // ClaimsPrincipal so [Authorize] and policies work out of the box. Note we key off RoleId —
-        // the token carries stable identifiers, and richer role data stays server-side.
+        // ClaimsPrincipal so [Authorize] and policies work out of the box. The claim VALUE is the role
+        // NAME ("Admin"), not its id — [Authorize(Roles="Admin")] and IsInRole("Admin") match on the
+        // name, so the caller must have loaded Roles WITH their Role navigation (.ThenInclude(ur => ur.Role)).
         foreach (var userRole in user.Roles)
         {
-            claims.Add(new Claim(ClaimTypes.Role, userRole.RoleId.ToString()));
+            claims.Add(new Claim(ClaimTypes.Role, userRole.Role.Name));
         }
 
         // Import the RSA private key from PEM. `using` disposes the key material promptly so it doesn't

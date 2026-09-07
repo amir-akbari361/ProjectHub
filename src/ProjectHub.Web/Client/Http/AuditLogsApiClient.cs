@@ -39,6 +39,42 @@ public sealed class AuditLogsApiClient
         var response = await _http.GetAsync($"api/auditlogs/{entity}/{entityId}{query}");
         return await response.ToResultAsync<PagedResult<AuditLogItem>>();
     }
+
+    /// <summary>
+    /// Returns one page of the ORGANISATION-WIDE audit trail, newest-first. Admin-only: the API answers
+    /// <c>403</c> for anyone else, which surfaces here as a failed <see cref="ApiResult{T}"/>.
+    /// </summary>
+    /// <remarks>
+    /// Every filter is optional and omitted when null, so a bare call returns the most recent activity across
+    /// all projects. <paramref name="entity"/> is the same closed enum the per-entity read uses, which keeps a
+    /// mistyped entity name from reaching the server at all.
+    ///
+    /// <paramref name="toUtc"/> is compared inclusively by the API, so pass an END-OF-DAY value when the user
+    /// picked a date rather than an instant — otherwise a filter of "to 27 August" excludes everything that
+    /// happened during the 27th.
+    /// </remarks>
+    public async Task<ApiResult<PagedResult<AdminAuditLogItem>>> ListAllAsync(
+        AuditedEntity? entity = null,
+        Guid? projectId = null,
+        Guid? performedBy = null,
+        DateTime? fromUtc = null,
+        DateTime? toUtc = null,
+        int pageNumber = 1,
+        int pageSize = 20)
+    {
+        var query = new QueryStringBuilder()
+            .Add("entityName", entity)
+            .Add("projectId", projectId)
+            .Add("performedBy", performedBy)
+            .Add("fromUtc", fromUtc)
+            .Add("toUtc", toUtc)
+            .Add("pageNumber", pageNumber)
+            .Add("pageSize", pageSize)
+            .Build();
+
+        var response = await _http.GetAsync($"api/admin/audit-logs{query}");
+        return await response.ToResultAsync<PagedResult<AdminAuditLogItem>>();
+    }
 }
 
 /// <summary>

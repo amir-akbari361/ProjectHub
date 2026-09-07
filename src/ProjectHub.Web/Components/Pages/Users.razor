@@ -1,0 +1,401 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@using System.Security.Claims
+@using ProjectHub.Web.Client.Formatting
+@using ProjectHub.Web.Client.Http
+@using ProjectHub.Web.Client.Models
+@inject AdminUsersApiClient AdminUsersApi
+@inject AuthenticationStateProvider AuthProvider
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Users · ProjectHub</PageTitle>
+
+@*
+    ADMIN USER DIRECTORY — accounts, their status, and their global roles.
+
+    WHY ROLE CHANGES DO NOT TAKE EFFECT IMMEDIATELY
+    Roles are baked into the access token at sign-in, so granting or revoking one changes what the holder can do
+    only after their token is next refreshed. The page says so out loud rather than leaving an admin to wonder
+    why nothing appeared to happen — this is inherent to stateless JWT authorisation, not a bug to hide.
+
+    WHY THE CALLER'S OWN ROW IS TREATED DIFFERENTLY
+    Two actions would lock an administrator out of this very page: deactivating their own account, and removing
+    their own Admin role. The server refuses both with a 409, and the UI disables them so the refusal is never
+    reached by accident. It is a guard against a misclick, not a permission — another admin can still do either.
+*@
+
+<PageHeader Title="Users" Subtitle="Accounts, access, and global roles">
+    <Actions>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Refresh"
+                   OnClick="@(() => LoadPageAsync(_pageNumber))"
+                   Disabled="_loading">
+            Refresh
+        </MudButton>
+    </Actions>
+</PageHeader>
+
+<MudPaper Class="ph-card pa-4 mb-4" Elevation="0">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="7">
+            <MudTextField T="string" Value="_searchTerm" Label="Search"
+                          Placeholder="Email, first or last name"
+                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Outlined.Search"
+                          Immediate="false"
+                          Clearable="true"
+                          ValueChanged="OnSearchChangedAsync"
+                          aria-label="Search users" />
+        </MudItem>
+
+        <MudItem xs="12" sm="5">
+            @* Tri-state on purpose: an admin console must be able to find the accounts that are switched OFF,
+               since that is where reactivation starts. *@
+            <MudSelect T="bool?" Value="_isActive" Label="Status"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true"
+                       ValueChanged="OnStatusChangedAsync">
+                <MudSelectItem T="bool?" Value="@((bool?)null)">All accounts</MudSelectItem>
+                <MudSelectItem T="bool?" Value="@true">Active only</MudSelectItem>
+                <MudSelectItem T="bool?" Value="@false">Deactivated only</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    <ListSkeleton Count="6" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="rounded-lg">@_error</MudAlert>
+}
+else if (_users.Count == 0)
+{
+    <EmptyState Icon="@Icons.Material.Outlined.PersonSearch"
+                Title="No matching accounts"
+                Message="Try a different search term or status filter." />
+}
+else
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+        @_totalCount @(_totalCount == 1 ? "account" : "accounts")
+    </MudText>
+
+    <div class="d-flex flex-column gap-2">
+        @foreach (var user in _users)
+        {
+            var isSelf = user.Id == _currentUserId;
+
+            <MudPaper Class="ph-card pa-3" Elevation="0" @key="user.Id">
+                <div class="d-flex align-center justify-space-between gap-3 flex-wrap">
+                    <div class="d-flex align-center gap-3">
+                        <MudAvatar Color="@(user.IsActive ? Color.Primary : Color.Default)" Size="Size.Medium">
+                            @Initials(user)
+                        </MudAvatar>
+
+                        <div>
+                            <div class="d-flex align-center gap-2 flex-wrap">
+                                <MudText Typo="Typo.body1" Style="font-weight:600;">@user.FullName</MudText>
+
+                                @if (isSelf)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info"
+                                             Variant="Variant.Text">You</MudChip>
+                                }
+
+                                @if (!user.IsActive)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Error"
+                                             Variant="Variant.Filled">Deactivated</MudChip>
+                                }
+
+                                @if (!user.IsEmailConfirmed)
+                                {
+                                    <MudTooltip Text="This account has not confirmed its email address.">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning"
+                                                 Variant="Variant.Outlined">Unconfirmed</MudChip>
+                                    </MudTooltip>
+                                }
+                            </div>
+
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@user.Email</MudText>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-center gap-1">
+                        @if (user.IsActive)
+                        {
+                            <MudTooltip Text="@(isSelf
+                                ? "You cannot deactivate your own account"
+                                : "Deactivate this account")">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Block"
+                                               Color="Color.Error" Size="Size.Small"
+                                               Disabled="@(isSelf || _working)"
+                                               aria-label="Deactivate account"
+                                               OnClick="@(() => ConfirmDeactivateAsync(user))" />
+                            </MudTooltip>
+                        }
+                        else
+                        {
+                            <MudTooltip Text="Reactivate this account">
+                                <MudIconButton Icon="@Icons.Material.Outlined.CheckCircle"
+                                               Color="Color.Success" Size="Size.Small"
+                                               Disabled="_working"
+                                               aria-label="Reactivate account"
+                                               OnClick="@(() => ActivateAsync(user))" />
+                            </MudTooltip>
+                        }
+                    </div>
+                </div>
+
+                <MudDivider Class="my-2" />
+
+                <div class="d-flex align-center gap-2 flex-wrap">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Global roles:</MudText>
+
+                    @if (user.Roles.Count == 0)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            <em>None</em>
+                        </MudText>
+                    }
+
+                    @foreach (var role in user.Roles.OrderBy(role => role))
+                    {
+                        var isOwnAdminRole = isSelf && IsAdminRole(role);
+
+                        @* A chip shows its × only when it HAS a close handler, so the two cases are rendered
+                           separately rather than passing a null callback — EventCallback is a struct and cannot
+                           be null. The un-closeable variant carries a tooltip so the missing × is explained
+                           instead of just looking broken. *@
+                        @if (isOwnAdminRole)
+                        {
+                            <MudTooltip Text="You cannot remove the Admin role from your own account. Another administrator can.">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                         Color="@RoleColor(role)">
+                                    @role
+                                </MudChip>
+                            </MudTooltip>
+                        }
+                        else if (_working)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                     Color="@RoleColor(role)">
+                                @role
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                     Color="@RoleColor(role)"
+                                     OnClose="@(() => RemoveRoleAsync(user, role))">
+                                @role
+                            </MudChip>
+                        }
+                    }
+
+                    @{
+                        var grantable = GrantableRoles(user).ToList();
+                    }
+
+                    @if (grantable.Count > 0)
+                    {
+                        <MudMenu Icon="@Icons.Material.Filled.Add" Size="Size.Small"
+                                 Color="Color.Primary" Dense="true"
+                                 AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft"
+                                 aria-label="Grant a role">
+                            @foreach (var role in grantable)
+                            {
+                                <MudMenuItem OnClick="@(() => AssignRoleAsync(user, role))">
+                                    Grant @role
+                                </MudMenuItem>
+                            }
+                        </MudMenu>
+                    }
+                </div>
+            </MudPaper>
+        }
+    </div>
+
+    @if (_totalPages > 1)
+    {
+        <div class="d-flex justify-center mt-4">
+            <MudPagination Color="Color.Primary" Count="_totalPages" Selected="_pageNumber"
+                           SelectedChanged="LoadPageAsync" />
+        </div>
+    }
+}
+
+@code {
+    private const int PageSize = 20;
+
+    /// <summary>
+    /// The global roles this console can grant. Mirrors the seeded roles table; the server rejects anything it
+    /// does not recognise, so a drift here is a 404 rather than a silent wrong grant.
+    /// </summary>
+    private static readonly string[] AssignableRoles = { "Admin", "Manager", "Member" };
+
+    private List<AdminUserItem> _users = new();
+    private bool _loading = true;
+    private bool _working;
+    private string? _error;
+    private int _pageNumber = 1;
+    private int _totalPages;
+    private int _totalCount;
+
+    private string? _searchTerm;
+    private bool? _isActive;
+    private Guid? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Needed to identify the caller's own row so the two lockout actions can be disabled. Read from the
+        // token's subject claim — the same value the API authorises on.
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        var subject = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (Guid.TryParse(subject, out var userId))
+        {
+            _currentUserId = userId;
+        }
+
+        await LoadPageAsync(1);
+    }
+
+    private async Task LoadPageAsync(int page)
+    {
+        _loading = true;
+        _error = null;
+
+        var result = await AdminUsersApi.ListAsync(
+            searchTerm: _searchTerm,
+            isActive: _isActive,
+            pageNumber: page,
+            pageSize: PageSize);
+
+        if (!result.IsSuccess || result.Value is null)
+        {
+            _error = result.Error ?? "Failed to load users.";
+            _users = new();
+            _totalPages = 0;
+            _totalCount = 0;
+        }
+        else
+        {
+            _users = result.Value.Items;
+            _totalPages = result.Value.TotalPages;
+            _totalCount = result.Value.TotalCount;
+            _pageNumber = result.Value.PageNumber;
+        }
+
+        _loading = false;
+    }
+
+    private Task OnSearchChangedAsync(string? term)
+    {
+        _searchTerm = term;
+        return LoadPageAsync(1);
+    }
+
+    private Task OnStatusChangedAsync(bool? isActive)
+    {
+        _isActive = isActive;
+        return LoadPageAsync(1);
+    }
+
+    /// <summary>
+    /// Deactivation is the one destructive action here — it cuts off someone's access — so it asks first.
+    /// Reactivation and role changes are cheap to undo and do not.
+    /// </summary>
+    private async Task ConfirmDeactivateAsync(AdminUserItem user)
+    {
+        var confirmed = await DialogService.ShowMessageBox(
+            "Deactivate account?",
+            $"{user.FullName} ({user.Email}) will no longer be able to sign in. "
+            + "Their projects, tasks and history are kept, and you can reactivate them at any time.",
+            yesText: "Deactivate",
+            cancelText: "Cancel");
+
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        await RunAsync(
+            () => AdminUsersApi.DeactivateAsync(user.Id),
+            $"{user.Email} has been deactivated.");
+    }
+
+    private Task ActivateAsync(AdminUserItem user) =>
+        RunAsync(
+            () => AdminUsersApi.ActivateAsync(user.Id),
+            $"{user.Email} has been reactivated.");
+
+    private Task AssignRoleAsync(AdminUserItem user, string role) =>
+        RunAsync(
+            () => AdminUsersApi.AssignRoleAsync(user.Id, role),
+            $"Granted {role} to {user.Email}. It applies when their token next refreshes.");
+
+    private Task RemoveRoleAsync(AdminUserItem user, string role) =>
+        RunAsync(
+            () => AdminUsersApi.RemoveRoleAsync(user.Id, role),
+            $"Removed {role} from {user.Email}. It applies when their token next refreshes.");
+
+    /// <summary>
+    /// Runs one mutation: blocks the action buttons while it is in flight, reports the outcome, and re-reads the
+    /// current page on success.
+    /// </summary>
+    /// <remarks>
+    /// The list is RE-FETCHED rather than patched in memory. A role grant can be refused by the server for
+    /// reasons this page cannot see (a concurrent change by another admin), so re-reading is what keeps the rows
+    /// honest instead of showing an optimistic state the database never accepted.
+    /// </remarks>
+    private async Task RunAsync(Func<Task<ApiResult>> action, string successMessage)
+    {
+        _working = true;
+
+        var result = await action();
+
+        if (result.IsSuccess)
+        {
+            Snackbar.Add(successMessage, Severity.Success);
+            await LoadPageAsync(_pageNumber);
+        }
+        else
+        {
+            Snackbar.Add(result.Error ?? "The change could not be applied.", Severity.Error);
+        }
+
+        _working = false;
+    }
+
+    /// <summary>Roles the user does not already hold — what the grant menu offers.</summary>
+    private static IEnumerable<string> GrantableRoles(AdminUserItem user) =>
+        AssignableRoles.Where(role =>
+            !user.Roles.Contains(role, StringComparer.OrdinalIgnoreCase));
+
+    private static bool IsAdminRole(string role) =>
+        string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+
+    private static Color RoleColor(string role) => role.ToLowerInvariant() switch
+    {
+        "admin" => Color.Error,
+        "manager" => Color.Warning,
+        _ => Color.Default,
+    };
+
+    private static string Initials(AdminUserItem user)
+    {
+        var first = user.FirstName.Length > 0 ? user.FirstName[0] : ' ';
+        var last = user.LastName.Length > 0 ? user.LastName[0] : ' ';
+        var initials = $"{first}{last}".Trim();
+
+        // Fall back to the address when a name is blank, so the avatar is never empty.
+        return initials.Length > 0
+            ? initials.ToUpperInvariant()
+            : (user.Email.Length > 0 ? user.Email[..1].ToUpperInvariant() : "?");
+    }
+}

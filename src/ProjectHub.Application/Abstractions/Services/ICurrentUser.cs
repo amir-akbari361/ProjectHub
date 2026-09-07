@@ -12,4 +12,11 @@ public interface ICurrentUser
     bool IsAuthenticated { get; }
 
     bool IsInRole(string role);
+
+    /// <summary>
+    /// True when the caller holds the global "Admin" role. A convenience over <see cref="IsInRole"/>
+    /// for the handlers that grant admins wider reach (the global audit viewer, user management) so the
+    /// role name is not duplicated as a literal across the Application layer.
+    /// </summary>
+    bool IsAdmin { get; }
 }

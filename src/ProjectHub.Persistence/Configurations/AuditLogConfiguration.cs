@@ -31,6 +31,13 @@ internal sealed class AuditLogConfiguration : EntityConfiguration<AuditLog>
         // Changes is an unbounded JSON payload; map it to nvarchar(max) via no max length.
         builder.Property(log => log.Changes);
 
+        // Denormalised owning-project id. Nullable, so no default and no data backfill is needed for
+        // existing rows — consistent with the additive-only migration policy.
+        builder.Property(log => log.ProjectId);
+
         builder.HasIndex(log => new { log.EntityName, log.EntityId });
+
+        // Backs both the membership-scoped read (Part B3) and the admin viewer's project filter (Part C).
+        builder.HasIndex(log => log.ProjectId);
     }
 }

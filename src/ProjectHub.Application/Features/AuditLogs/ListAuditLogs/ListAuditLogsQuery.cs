@@ -6,9 +6,9 @@ namespace ProjectHub.Application.Features.AuditLogs.ListAuditLogs;
 /// <summary>
 /// Query to page through the immutable audit trail of ONE entity — "show me the history of this
 /// project/task." A READ-side request in CQRS. It carries the target entity's name and id plus paging.
-/// The caller's permission to view that entity is enforced in the handler (membership on the owning
-/// project), never trusted from the client. Returns a <see cref="PagedList{T}"/> of
-/// <see cref="AuditLogResponse"/> ordered newest-first.
+/// The caller's permission to view that entity is enforced in the handler (project membership on the
+/// owning project, or the global Admin role), never trusted from the client. Returns a
+/// <see cref="PagedList{T}"/> of <see cref="AuditLogResponse"/> ordered newest-first.
 /// </summary>
 /// <remarks>
 /// WHY IS <c>EntityName</c> A CALLER-SUPPLIED STRING RATHER THAN AN ENUM OR ROUTE-DERIVED TYPE?

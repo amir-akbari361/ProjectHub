@@ -59,6 +59,21 @@ internal sealed class QueryStringBuilder
         value is { } guid ? Append(name, guid.ToString()) : this;
 
     /// <summary>
+    /// Appends a timestamp unless null, using the round-trip ("O") format.
+    /// </summary>
+    /// <remarks>
+    /// Round-trip rather than the culture's default: "O" is unambiguous, preserves the full precision and the
+    /// UTC designator, and is a format ASP.NET's model binder parses without help. Formatting a date with the
+    /// ambient culture is precisely the class of bug this builder exists to prevent — on a machine with a
+    /// day-first culture, <c>ToString()</c> produces a value the binder reads month-first, silently shifting a
+    /// date filter by weeks.
+    /// </remarks>
+    public QueryStringBuilder Add(string name, DateTime? value) =>
+        value is { } timestamp
+            ? Append(name, Uri.EscapeDataString(timestamp.ToString("O", CultureInfo.InvariantCulture)))
+            : this;
+
+    /// <summary>
     /// Appends a nullable enum by NAME unless null. Names rather than numbers because a name is readable in a
     /// log or a browser address bar, and it keeps working if the enum's underlying values are ever renumbered.
     /// </summary>

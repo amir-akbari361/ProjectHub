@@ -131,8 +131,13 @@ public static class DependencyInjection
         // IOptions<JwtOptions> and build the RSA key ONCE, at first resolution, rather than per request.
         services.ConfigureOptions<ConfigureJwtBearerOptions>();
 
-        // Authorization services back the [Authorize] attribute and any policies the host declares.
-        services.AddAuthorization();
+        // Authorization services back the [Authorize] attribute and the policies the host declares. The
+        // "Admin" policy is the server-authoritative gate behind the admin-only endpoints (global audit
+        // viewer, user management); it matches on the role NAME "Admin", which the JWT now carries.
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy("Admin", policy => policy.RequireRole("Admin"));
+        });
 
         return services;
     }
