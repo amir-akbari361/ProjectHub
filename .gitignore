@@ -655,3 +655,18 @@ src/ProjectHub.API/bin/Debug/net9.0/ProjectHub.Application.pdb
 src/ProjectHub.API/bin/Debug/net9.0/ProjectHub.Domain.dll
 src/ProjectHub.API/bin/Debug/net9.0/ProjectHub.Domain.pdb
 src/ProjectHub.API/obj/Debug/net9.0/ProjectHub.API.sourcelink.json
+
+# --- Visual Studio local state ------------------------------------------------------------------
+# Solution user options, design-time caches, and the Copilot index databases. All machine-local,
+# all regenerated on open, and collectively the bulk of this repo's size if committed.
+.vs/
+
+# --- Local scratch output -----------------------------------------------------------------------
+# Ad-hoc captures from debugging sessions: build logs, API token dumps, listing/diagnostic files.
+# Never useful to another clone, and a *.tmp token dump is exactly the kind of thing that should
+# not reach a public remote.
+*.tmp
+*.log
+_*.txt
+scripts/run.err.txt
+scripts/run.out.txt
